@@ -28,10 +28,11 @@ var (
 )
 
 type Task struct {
-	ID      uint64     `gorm:"column:id;primary_key;auto_increment" json:"id"`
-	Name    string     `gorm:"column:name;not null" json:"name"`
-	Command string     `gorm:"column:command;not null" json:"command"`
-	Reason  string     `gorm:"column:reason;not null" json:"reason"` // Reason for canceling the task
-	Status  TaskStatus `gorm:"column:status;not null" json:"status"`
+	ID       uint64     `gorm:"column:id;primary_key;auto_increment" json:"id"`
+	Name     string     `gorm:"column:name;not null" json:"name"`
+	Command  string     `gorm:"column:command;not null" json:"command"`
+	Reason   string     `gorm:"column:reason;not null" json:"reason"` // Reason for canceling the task
+	Status   TaskStatus `gorm:"column:status;not null" json:"status"`
+	ExitCode int        `gorm:"column:exit_code;not null" json:"exit_code"`
 	CommonModel
 }

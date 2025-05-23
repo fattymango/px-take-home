@@ -16,19 +16,21 @@ func (c *CrtTask) ToTask() *model.Task {
 }
 
 type ViewTask struct {
-	ID      uint64           `json:"id"`
-	Name    string           `json:"name"`
-	Command string           `json:"command"`
-	Status  model.TaskStatus `json:"status"`
-	Reason  string           `json:"reason"`
+	ID       uint64           `json:"id"`
+	Name     string           `json:"name"`
+	Command  string           `json:"command"`
+	Status   model.TaskStatus `json:"status"`
+	Reason   string           `json:"reason"`
+	ExitCode int              `json:"exit_code"`
 }
 
 func ToViewTask(t *model.Task) *ViewTask {
 	return &ViewTask{
-		ID:      t.ID,
-		Name:    t.Name,
-		Command: t.Command,
-		Status:  t.Status,
-		Reason:  t.Reason,
+		ID:       t.ID,
+		Name:     t.Name,
+		Command:  t.Command,
+		Status:   t.Status,
+		Reason:   t.Reason,
+		ExitCode: t.ExitCode,
 	}
 }

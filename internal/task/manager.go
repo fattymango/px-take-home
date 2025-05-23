@@ -16,6 +16,7 @@ const (
 	op_CANCEL_TASK
 	op_EXECUTE_TASK
 	op_TASK_FAILED
+	op_TASK_COMPLETED
 )
 
 type taskMsg struct {
@@ -44,32 +45,44 @@ func (t *TaskManager) Start() {
 	go t.processTasks()
 }
 
+// TODO: This is a blocking operation, we should use a non-blocking operation
+// But we need to make sure that the operations on DB are FIFO so we don't result in data inconsistency
 func (t *TaskManager) processTasks() {
 	for data := range t.taskChan {
-		go func(data *taskMsg) {
-			switch data.op {
-			case op_STATUS_CHANGE:
-				err := t.UpdateTaskStatus(data.task)
-				if err != nil {
-					t.logger.Errorf("failed to update task status: %s", err)
-				}
-			case op_CANCEL_TASK:
-				err := t.CancelTask(data.task)
-				if err != nil {
-					t.logger.Errorf("failed to cancel task: %s", err)
-				}
-			case op_EXECUTE_TASK:
+		// go func(data *taskMsg) {
+		switch data.op {
+		case op_STATUS_CHANGE:
+			err := t.UpdateTaskStatus(data.task)
+			if err != nil {
+				t.logger.Errorf("failed to update task status: %s", err)
+			}
+		case op_CANCEL_TASK:
+			err := t.CancelTask(data.task)
+			if err != nil {
+				t.logger.Errorf("failed to cancel task: %s", err)
+			}
+		case op_EXECUTE_TASK:
+			go func() {
 				err := t.ExecuteTask(data.task)
 				if err != nil {
 					t.logger.Errorf("failed to execute task: %s", err)
 				}
-			case op_TASK_FAILED:
-				err := t.TaskFailed(data.task)
-				if err != nil {
-					t.logger.Errorf("failed to task failed: %s", err)
-				}
+			}()
+		case op_TASK_FAILED:
+			err := t.TaskFailed(data.task)
+			if err != nil {
+				t.logger.Errorf("failed to task failed: %s", err)
 			}
-		}(data)
+		case op_TASK_COMPLETED:
+			err := t.TaskCompleted(data.task)
+			if err != nil {
+				t.logger.Errorf("failed to task completed: %s", err)
+			}
+
+		default:
+			continue
+		}
+		// }(data)
 	}
 }
 
@@ -121,5 +134,9 @@ func (t *TaskManager) ExecuteTask(task *model.Task) error {
 }
 
 func (t *TaskManager) TaskFailed(task *model.Task) error {
-	return t.repo.TaskFailed(task.ID, task.Reason)
+	return t.repo.TaskFailed(task.ID, task.Reason, task.ExitCode)
+}
+
+func (t *TaskManager) TaskCompleted(task *model.Task) error {
+	return t.repo.TaskCompleted(task.ID, task.ExitCode)
 }

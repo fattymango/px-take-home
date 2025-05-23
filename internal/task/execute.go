@@ -31,14 +31,14 @@ func NewTaskExecutor(config *config.Config, logger *logger.Logger, task *model.T
 func (t *TaskExecutor) Execute() error {
 	_, err := shell.ParseCommand(t.task.Command)
 	if err != nil {
-		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrMalformedCommand, err))
+		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrMalformedCommand, err), 1)
 		return fmt.Errorf("%s: %s", ErrMalformedCommand, err)
 	}
 
 	if t.config.CMD.Validate {
 		msg, ok := shell.ValidateMaliciousCommand(t.task.Command)
 		if !ok {
-			t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrMaliciousCommand, msg))
+			t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrMaliciousCommand, msg), 1)
 			return fmt.Errorf("%s: %s", ErrMaliciousCommand, msg)
 		}
 	}
@@ -84,22 +84,29 @@ func (t *TaskExecutor) Execute() error {
 		}
 	}
 
+	if exitCode != 0 {
+		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrFailedToExecute, combinedOutput), exitCode)
+		return fmt.Errorf("%s: %d", ErrFailedToExecute, exitCode)
+	}
+
 	t.logger.Infof("exit code: %d", exitCode)
 
 	t.sendTaskCompleted(combinedOutput)
 	return nil
 }
 
-func (t *TaskExecutor) sendTaskFailed(reason string) {
+func (t *TaskExecutor) sendTaskFailed(reason string, exitCode int) {
 	t.task.Status = model.TaskStatus_Failed
 	t.task.Reason = reason
+	t.task.ExitCode = exitCode
 	t.taskChan <- &taskMsg{op: op_TASK_FAILED, task: t.task}
 }
 
 func (t *TaskExecutor) sendTaskCompleted(output []string) {
 	t.task.Status = model.TaskStatus_Completed
 	t.task.Reason = strings.Join(output, "\n")
-	t.taskChan <- &taskMsg{op: op_STATUS_CHANGE, task: t.task}
+	t.task.ExitCode = 0
+	t.taskChan <- &taskMsg{op: op_TASK_COMPLETED, task: t.task}
 }
 
 func (t *TaskExecutor) sendTaskRunning() {
