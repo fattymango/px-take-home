@@ -1,0 +1,103 @@
+basePath: /
+definitions:
+  dto.BaseResponse:
+    properties:
+      code:
+        type: integer
+      data: {}
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  dto.ViewTask:
+    properties:
+      command:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      status:
+        $ref: '#/definitions/model.TaskStatus'
+    type: object
+  model.TaskStatus:
+    enum:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    type: integer
+    x-enum-varnames:
+    - TaskStatus_Queued
+    - TaskStatus_Running
+    - TaskStatus_Completed
+    - TaskStatus_Failed
+    - TaskStatus_Canceled
+host: localhost:8888
+info:
+  contact:
+    email: fiber@swagger.io
+    name: API Support
+  description: This is the API specification for the PX Take Home API
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: PX Take Home API Specification
+  version: 0.0.1
+paths:
+  /api/v1/{templateID}:
+    get:
+      consumes:
+      - application/json
+      description: Get a template by ID
+      operationId: GetTemplateByID
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: '#/definitions/dto.ViewTask'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+      security:
+      - BearerAuth: []
+      - BearerAuth: []
+      summary: Get template by ID
+      tags:
+      - Template
+schemes:
+- http
+securityDefinitions:
+  BasicAuth:
+    type: basic
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
