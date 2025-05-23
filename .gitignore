@@ -2,3 +2,4 @@ bin/
 logs/
 .env
 .env.debug
+db/px.db
