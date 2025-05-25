@@ -68,9 +68,15 @@ func (t *TaskLogger) ListenToStream(stdout, stderr <-chan string) {
 		defer t.wg.Done()
 		for {
 			select {
-			case line := <-stdout:
+			case line, ok := <-stdout:
+				if !ok {
+					continue
+				}
 				t.Write([]byte(line))
-			case line := <-stderr:
+			case line, ok := <-stderr:
+				if !ok {
+					continue
+				}
 				t.Write([]byte(line))
 			case <-t.ctx.Done():
 				return

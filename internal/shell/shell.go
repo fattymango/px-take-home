@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/mattn/go-shellwords"
 )
@@ -39,26 +38,25 @@ func NewShellExecutor(command string) *ShellExecutor {
 	}
 }
 
-func (s *ShellExecutor) Execute() (<-chan string, <-chan string, <-chan int, error) {
+func (s *ShellExecutor) Execute() (<-chan string, <-chan string, error) {
 	s.stdout = make(chan string)
 	s.stderr = make(chan string)
-	s.exitCode = make(chan int, 1)
 
 	s.cmd = exec.CommandContext(s.ctx, "bash", "-c", s.command)
 
 	stdoutPipe, err := s.cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+		return nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 	s.stdoutPipe = stdoutPipe
 
 	stderrPipe, err := s.cmd.StderrPipe()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+		return nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 	s.stderrPipe = stderrPipe
 	if err := s.cmd.Start(); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to start command: %w", err)
+		return nil, nil, fmt.Errorf("failed to start command: %w", err)
 	}
 
 	s.wg.Add(2)
@@ -66,42 +64,53 @@ func (s *ShellExecutor) Execute() (<-chan string, <-chan string, <-chan int, err
 	go readPipe(s.stderrPipe, s.stderr, &s.wg, "stderr", s.ctx)
 	go readPipe(s.stdoutPipe, s.stdout, &s.wg, "stdout", s.ctx)
 
-	go s.WaitExitCode()
-
-	return s.stdout, s.stderr, s.exitCode, nil
+	return s.stdout, s.stderr, nil
 }
 
 func (s *ShellExecutor) Cancel() error {
 	s.cancel()
+	s.cmd.Process.Kill()
+	s.stderrPipe.Close()
+	s.stdoutPipe.Close()
 	return nil
 }
 
-func (s *ShellExecutor) WaitExitCode() {
+func (s *ShellExecutor) GetExitCode() (int, error) {
 	err := s.cmd.Wait()
-	// s.stderrPipe.Close()
-	// s.stdoutPipe.Close()
-
-	s.wg.Wait()
-	fmt.Println("closing outputChan")
-	// close(s.stdout)
-	// close(s.stderr)
-
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-				s.exitCode <- status.ExitStatus()
-			} else {
-				s.exitCode <- -1
-			}
-		} else {
-			s.exitCode <- -1
-		}
-	} else {
-		s.exitCode <- 0
+		return -1, fmt.Errorf("failed to get exit code: %w", err)
 	}
+	exitCode := s.cmd.ProcessState.ExitCode()
 
-	close(s.exitCode)
+	return exitCode, nil
 }
+
+// func (s *ShellExecutor) WaitExitCode() {
+// 	err := s.cmd.Wait()
+// 	// s.stderrPipe.Close()
+// 	// s.stdoutPipe.Close()
+
+// 	s.wg.Wait()
+// 	fmt.Println("closing outputChan")
+// 	close(s.stdout)
+// 	close(s.stderr)
+
+// 	if err != nil {
+// 		if exitErr, ok := err.(*exec.ExitError); ok {
+// 			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+// 				s.exitCode <- status.ExitStatus()
+// 			} else {
+// 				s.exitCode <- -1
+// 			}
+// 		} else {
+// 			s.exitCode <- -1
+// 		}
+// 	} else {
+// 		s.exitCode <- 0
+// 	}
+
+// 	close(s.exitCode)
+// }
 
 func readPipe(pipe io.ReadCloser, outputChan chan<- string, wg *sync.WaitGroup, name string, ctx context.Context) {
 	// fmt.Printf("reading %s pipe\n", name)
@@ -132,6 +141,7 @@ func readPipe(pipe io.ReadCloser, outputChan chan<- string, wg *sync.WaitGroup, 
 	// }
 
 	defer wg.Done()
+	defer close(outputChan)
 	defer fmt.Printf("closing %s pipe\n", name)
 	scanner := bufio.NewScanner(pipe)
 	for scanner.Scan() {

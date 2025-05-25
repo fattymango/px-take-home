@@ -1,7 +1,6 @@
 package task
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
@@ -15,11 +14,11 @@ import (
 type operation uint8
 
 const (
-	op_CANCEL_TASK operation = iota + 1
-	op_EXECUTE_TASK
+	op_EXECUTE_TASK operation = iota + 1
 	op_TASK_FAILED
 	op_TASK_COMPLETED
 	op_TASK_RUNNING
+	op_TASK_CANCELLED
 )
 
 const (
@@ -36,36 +35,54 @@ type JobMsg struct {
 	exitCode int
 }
 
+type LogMsg struct {
+	TaskID uint64
+	Line   string
+}
+
+type TaskMsg struct {
+	TaskID uint64
+	Status model.TaskStatus
+}
+
 type TaskManager struct {
 	config *config.Config
 	logger *logger.Logger
 	repo   TaskRepository
 	cache  JobCache
-
-	taskChan         chan *JobMsg
-	ctx              context.Context
-	cancel           context.CancelFunc
-	wg               sync.WaitGroup
-	jobsWg           sync.WaitGroup
+	// task logger constructor, can be replaced with different implementations
 	newTasklogReader func(*config.Config, *logger.Logger, uint64) logreader.LogReader
+
+	// channel to send messages from task executors to task manager
+	taskChan chan *JobMsg
+
+	// wait group for the task manager
+	wg sync.WaitGroup
+	// wait group for the jobs
+	jobsWg sync.WaitGroup
+
+	logStream  chan *LogMsg
+	taskStream chan *TaskMsg
 }
 
 func NewTaskManager(config *config.Config, logger *logger.Logger, db *db.DB) *TaskManager {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &TaskManager{
 		config:   config,
 		logger:   logger,
 		repo:     NewTaskDB(config, logger, db),
 		taskChan: make(chan *JobMsg),
 		cache:    NewInMemoryJobCache(),
-		ctx:      ctx,
-		cancel:   cancel,
-		wg:       sync.WaitGroup{},
-		jobsWg:   sync.WaitGroup{},
+
+		wg:     sync.WaitGroup{},
+		jobsWg: sync.WaitGroup{},
+
 		// newTasklogReader: tasklogger.NewTailHeadReader,
 		// newTasklogReader: tasklogger.NewSedReader,
 		// newTasklogReader: tasklogger.NewAwkReader,
 		newTasklogReader: logreader.NewBufferReader,
+
+		logStream:  make(chan *LogMsg),
+		taskStream: make(chan *TaskMsg),
 	}
 }
 
@@ -75,7 +92,6 @@ func (t *TaskManager) Start() {
 }
 
 func (t *TaskManager) Stop() {
-	t.cancel()
 	runningJobs, err := t.cache.GetAllJobs()
 	if err != nil {
 		t.logger.Errorf("failed to get all jobs: %s", err)
@@ -83,7 +99,8 @@ func (t *TaskManager) Stop() {
 
 	for _, job := range runningJobs {
 		t.logger.Infof("cancelling job #%d", job.task.ID)
-		job.cancel()
+		job.Cancel()
+		job.Wait()
 	}
 	// time.Sleep(1 * time.Second)
 	t.jobsWg.Wait()
@@ -91,6 +108,8 @@ func (t *TaskManager) Stop() {
 	close(t.taskChan)
 	t.logger.Infof("tasks finished")
 	t.wg.Wait()
+	close(t.logStream)
+	close(t.taskStream)
 }
 
 // TODO: This is a blocking operation, we should use a non-blocking operation
@@ -116,8 +135,8 @@ func (t *TaskManager) processTasks() {
 // Helper function to process a single task
 func (t *TaskManager) processTask(data *JobMsg) {
 	switch data.op {
-	case op_CANCEL_TASK:
-		err := t.CancelTask(data.taskID, data.reason)
+	case op_TASK_CANCELLED:
+		err := t.TaskCancelled(data.taskID, data.exitCode)
 		if err != nil {
 			t.logger.Errorf("failed to cancel task: %s", err)
 		}
@@ -131,9 +150,22 @@ func (t *TaskManager) processTask(data *JobMsg) {
 		if err != nil {
 			t.logger.Errorf("failed to task completed: %s", err)
 		}
+	case op_TASK_RUNNING:
+		err := t.TaskRunning(data.taskID)
+		if err != nil {
+			t.logger.Errorf("failed to task running: %s", err)
+		}
 	default:
 		return
 	}
+}
+
+func (t *TaskManager) LogStream() <-chan *LogMsg {
+	return t.logStream
+}
+
+func (t *TaskManager) TaskStream() <-chan *TaskMsg {
+	return t.taskStream
 }
 
 func (t *TaskManager) CreateTask(task *model.Task) (*model.Task, error) {
@@ -163,20 +195,14 @@ func (t *TaskManager) GetAllTasks() ([]*model.Task, error) {
 	return tasks, nil
 }
 
-func (t *TaskManager) UpdateTaskStatus(task *model.Task) error {
-	t.logger.Infof("updating task status: %s", model.TaskStatus_name[task.Status])
-	return t.repo.UpdateTaskStatus(task.ID, task.Status)
-}
-
-func (t *TaskManager) CancelTask(taskID uint64, reason string) error {
+func (t *TaskManager) CancelTask(taskID uint64, reason string, exitCode int) error {
 	job, err := t.cache.GetJob(taskID)
 	if err != nil {
 		return fmt.Errorf("failed to get job: %w", err)
 	}
-	job.cancel()
+	job.Cancel()
 
-	t.cache.DeleteJob(taskID)
-	return t.repo.CancelTask(taskID, reason)
+	return nil
 }
 
 func (t *TaskManager) ExecuteTask(task *model.Task) error {
@@ -185,7 +211,7 @@ func (t *TaskManager) ExecuteTask(task *model.Task) error {
 	t.jobsWg.Add(1)
 
 	go func() {
-		executor := NewTaskExecutor(t.config, t.logger, job, t.taskChan)
+		executor := NewJobExecutor(t.config, t.logger, job, t.taskChan, t.logStream)
 		err := executor.Execute()
 		if err != nil {
 			t.logger.Errorf("failed to execute task: %s", err)
@@ -197,12 +223,25 @@ func (t *TaskManager) ExecuteTask(task *model.Task) error {
 
 func (t *TaskManager) TaskFailed(taskID uint64, reason string, exitCode int) error {
 	t.cache.DeleteJob(taskID)
+	t.taskStream <- &TaskMsg{TaskID: taskID, Status: model.TaskStatus_Failed}
 	return t.repo.TaskFailed(taskID, reason, exitCode)
 }
 
 func (t *TaskManager) TaskCompleted(taskID uint64, exitCode int) error {
 	t.cache.DeleteJob(taskID)
+	t.taskStream <- &TaskMsg{TaskID: taskID, Status: model.TaskStatus_Completed}
 	return t.repo.TaskCompleted(taskID, exitCode)
+}
+
+func (t *TaskManager) TaskCancelled(taskID uint64, exitCode int) error {
+	t.cache.DeleteJob(taskID)
+	t.taskStream <- &TaskMsg{TaskID: taskID, Status: model.TaskStatus_Cancelled}
+	return t.repo.TaskCancelled(taskID, ReasonCancelledBySystem, exitCode)
+}
+
+func (t *TaskManager) TaskRunning(taskID uint64) error {
+	t.taskStream <- &TaskMsg{TaskID: taskID, Status: model.TaskStatus_Running}
+	return t.repo.TaskRunning(taskID)
 }
 
 func (t *TaskManager) GetTaskLogs(taskID uint64, from, to int) ([]string, int, error) {
