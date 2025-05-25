@@ -159,7 +159,7 @@ sqlite-create-db:
 fresh-start:
 	@$(MAKE) sqlite-flush-db
 	@$(MAKE) sqlite-create-db
-	@$(MAKE) clean
+	
 	@$(MAKE) run
 
 .PHONY: install-deps

@@ -82,6 +82,7 @@ func (t *JobExecutor) Execute() error {
 			if !ok {
 				stdErrChan = nil
 				t.logger.Infof("stderr channel closed")
+				continue
 			}
 			t.writeStderrLog(line)
 			reason += line
@@ -89,6 +90,7 @@ func (t *JobExecutor) Execute() error {
 			if !ok {
 				stdOutChan = nil
 				t.logger.Infof("stdout channel closed")
+				continue
 			}
 			t.writeStdoutLog(line)
 

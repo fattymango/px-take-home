@@ -10,8 +10,9 @@ const TaskStatus = {
     5: 'Canceled'
 };
 
-const MsgTypeLog = "log";
-const MsgTypeTaskStatus = "taskStatus";
+// Event Types
+const MsgTypeTaskStatus = 1;
+const MsgTypeLog = 2;
 
 // DOM Elements
 const createTaskForm = document.getElementById('createTaskForm');
@@ -41,6 +42,12 @@ let currentLogState = {
 
 // SSE connection
 let eventSource = null;
+
+// Buffer for collecting log messages before rendering
+let logBuffer = [];
+let isRenderPending = false;
+const LOG_BUFFER_SIZE = 50; // Number of logs to collect before forcing a render
+const RENDER_DELAY = 16; // Roughly 60fps
 
 // Event Listeners
 createTaskForm.addEventListener('submit', handleCreateTask);
@@ -154,16 +161,32 @@ function renderTasks(tasks) {
         return;
     }
 
-    tasksList.innerHTML = tasks.map(task => `
-        <div class="task-item" data-task-id="${task.id}">
-            <h3>${task.name}</h3>
-            <p><strong>Command:</strong> ${task.command}</p>
-            <p><strong>Status:</strong> <span class="task-status status-${TaskStatus[task.status].toLowerCase()}">${TaskStatus[task.status]}</span></p>
-            ${task.exit_code !== undefined ? `<p><strong>Exit Code:</strong> ${task.exit_code}</p>` : ''}
-            ${task.reason ? `<p><strong>Reason:</strong> ${task.reason}</p>` : ''}
-            <button onclick="showLogs(${task.id})" class="view-logs-btn">View Logs</button>
+    tasksList.innerHTML = tasks.map(task => {
+        const status = TaskStatus[task.status];
+        const statusLower = status.toLowerCase();
+        
+        let actionButtons = '';
+        if (statusLower === 'queued' || statusLower === 'running') {
+            actionButtons = `<button onclick="cancelTask(${task.id})" class="cancel-btn">Cancel</button>`;
+        }
+
+        return `
+        <div class="task-item" data-status="${statusLower}" data-task-id="${task.id}">
+            <div class="task-header">
+                <h3>${task.name}</h3>
+            </div>
+            <div class="task-info">
+                <p><strong>Command:</strong> ${task.command}</p>
+                <p><strong>Status:</strong> <span class="task-status status-${statusLower}">${status}</span></p>
+                ${task.exit_code !== undefined ? `<p><strong>Exit Code:</strong> ${task.exit_code}</p>` : ''}
+                ${task.reason ? `<p><strong>Reason:</strong> ${task.reason}</p>` : ''}
+                <div class="task-actions">
+                    <button onclick="showLogs(${task.id})" class="view-logs-btn">View Logs</button>
+                    ${actionButtons}
+                </div>
+            </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 async function showLogs(taskId) {
@@ -352,7 +375,7 @@ function connectToSSE() {
         try {
             const message = JSON.parse(e.data);
             
-            switch (message.event) {
+            switch (parseInt(message.event)) {
                 case MsgTypeLog:
                     handleLogMessage(message);
                     break;
@@ -382,23 +405,82 @@ function connectToSSE() {
 function handleLogMessage(data) {
     const taskId = parseInt(data.taskID);
     if (taskId === currentTaskId) {
-        // Append new log line
-        const logLine = document.createElement('div');
-        logLine.textContent = data.value;
-        logsContent.appendChild(logLine);
-        logsContent.scrollTop = logsContent.scrollHeight;
+        // Add to buffer
+        logBuffer.push(data.value);
         
-        // Update total lines count
+        // Update state
         currentLogState.totalLines++;
         currentLogState.loadedLines.to = currentLogState.totalLines;
 
-        // Update header
-        const header = document.querySelector('.logs-header');
-        if (header) {
-            header.textContent = `Showing lines ${currentLogState.loadedLines.from}-${currentLogState.loadedLines.to} of ${currentLogState.totalLines}`;
+        // Schedule render if not already pending
+        if (!isRenderPending) {
+            isRenderPending = true;
+            requestAnimationFrame(flushLogBuffer);
+        }
+
+        // Force render if buffer is getting too large
+        if (logBuffer.length >= LOG_BUFFER_SIZE) {
+            flushLogBuffer();
         }
     }
 }
+
+function flushLogBuffer() {
+    if (logBuffer.length === 0) {
+        isRenderPending = false;
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const shouldScroll = isScrolledToBottom();
+
+    // Create elements for all buffered logs
+    logBuffer.forEach(log => {
+        const logLine = document.createElement('div');
+        logLine.textContent = log;
+        fragment.appendChild(logLine);
+    });
+
+    // Update DOM in a single operation
+    logsContent.appendChild(fragment);
+
+    // Update header
+    const header = document.querySelector('.logs-header');
+    if (header) {
+        header.textContent = `Showing lines ${currentLogState.loadedLines.from}-${currentLogState.loadedLines.to} of ${currentLogState.totalLines}`;
+    }
+
+    // Maintain scroll position if user was at bottom
+    if (shouldScroll) {
+        logsContent.scrollTop = logsContent.scrollHeight;
+    }
+
+    // Clear buffer
+    logBuffer = [];
+    isRenderPending = false;
+}
+
+function isScrolledToBottom() {
+    const threshold = 50; // pixels from bottom to consider "scrolled to bottom"
+    return logsContent.scrollHeight - logsContent.scrollTop - logsContent.clientHeight < threshold;
+}
+
+// Virtual scrolling implementation
+const VIRTUAL_SCROLL_BUFFER = 1000; // Maximum number of visible log lines
+function trimOldLogs() {
+    const logElements = logsContent.getElementsByTagName('div');
+    if (logElements.length > VIRTUAL_SCROLL_BUFFER) {
+        const numToRemove = logElements.length - VIRTUAL_SCROLL_BUFFER;
+        for (let i = 0; i < numToRemove; i++) {
+            if (logElements[1]) { // Skip header element
+                logElements[1].remove();
+            }
+        }
+    }
+}
+
+// Add periodic cleanup to prevent memory issues
+setInterval(trimOldLogs, 5000);
 
 function handleTaskStatusMessage(data) {
     const taskId = parseInt(data.taskID);
@@ -433,4 +515,27 @@ window.addEventListener('beforeunload', () => {
     if (eventSource) {
         eventSource.close();
     }
-}); 
+});
+
+async function cancelTask(taskId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/cancel`, {
+            method: 'DELETE',
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to cancel task');
+        }
+
+        // Task cancellation initiated successfully
+        // The actual status update will come through SSE
+    } catch (error) {
+        console.error('Error cancelling task:', error);
+        alert('Failed to cancel task. Please try again.');
+    }
+} 
