@@ -2,6 +2,7 @@ package sse
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 
 	"github.com/fattymango/px-take-home/config"
@@ -9,21 +10,17 @@ import (
 	"github.com/fattymango/px-take-home/pkg/logger"
 )
 
-type EventType string
+type EventType uint8
 
 const (
-	MsgTypeTaskStatus EventType = "taskStatus"
-	MsgTypeLog        EventType = "log"
+	MsgTypeTaskStatus EventType = iota + 1
+	MsgTypeLog
 )
 
 type Msg struct {
 	Event  EventType   `json:"event"`
 	TaskID uint64      `json:"taskID"`
 	Value  interface{} `json:"value"`
-}
-
-type SSEMsg struct {
-	Data Msg `json:"data"`
 }
 
 type SseManager struct {
@@ -78,38 +75,37 @@ func (s *SseManager) Stop() {
 }
 
 func (s *SseManager) sendTaskStatus(msg *task.TaskMsg) {
-	// m := SSEMsg{
-	// 	Data: Msg{
-	// 		Event:  MsgTypeTaskStatus,
-	// 		TaskID: msg.TaskID,
-	// 		Value:  msg,
-	// 	},
-	// }
-	// data, _ := json.Marshal(m)
-	data := fmt.Sprintf("data: {\"event\": \"taskStatus\", \"taskID\": \"%d\", \"value\": %v}\n\n", msg.TaskID, msg.Status)
+	sseMessage := s.formatSSEMessage(&Msg{
+		Event:  MsgTypeTaskStatus,
+		TaskID: msg.TaskID,
+		Value:  msg.Status,
+	})
+
 	for client := range s.clients {
 		s.logger.Info("Sending task status to client", "client", client.ID, "taskID", msg.TaskID)
-		client.Write(string(data))
+		client.Write(sseMessage)
 	}
 }
 
 func (s *SseManager) sendLog(msg *task.LogMsg) {
-	// m := SSEMsg{
-	// 	Data: Msg{
-	// 		Event:  MsgTypeLog,
-	// 		TaskID: msg.TaskID,
-	// 		Value:  msg,
-	// 	},
-	// }
-	// data, _ := json.Marshal(m)
-	data := fmt.Sprintf("data: {\"event\": \"log\", \"taskID\": \"%d\", \"value\": %v}\n\n", msg.TaskID, msg.Line)
+	sseMessage := s.formatSSEMessage(&Msg{
+		Event:  MsgTypeLog,
+		TaskID: msg.TaskID,
+		Value:  msg.Line,
+	})
+
 	for client := range s.clients {
 		s.logger.Info("Sending log to client", "client", client.ID, "taskID", msg.TaskID)
-		client.Write(string(data))
+		client.Write(sseMessage)
 	}
 }
 func (s *SseManager) NewSSEClient(buffer *bufio.Writer) *Client {
 	client := NewClient(uint64(len(s.clients)+1), buffer)
 	s.clients[client] = true
 	return client
+}
+
+func (s *SseManager) formatSSEMessage(msg *Msg) string {
+	data, _ := json.Marshal(msg)
+	return fmt.Sprintf("data: %s\n\n", data)
 }

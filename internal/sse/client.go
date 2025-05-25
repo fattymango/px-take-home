@@ -25,11 +25,12 @@ func NewClient(id uint64, buffer *bufio.Writer) *Client {
 }
 
 func (c *Client) Write(data string) error {
-	fmt.Println("Writing data to client", data)
-	_, err := fmt.Fprint(c.Buffer, data)
-	if err != nil {
-		return err
-	}
+	// fmt.Println("Writing data to client", data)
+	// _, err := fmt.Fprint(c.Buffer, data)
+	// if err != nil {
+	// 	return err
+	// }
+	c.Buffer.WriteString(data)
 	return c.Buffer.Flush()
 }
 
