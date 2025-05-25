@@ -1,7 +1,10 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/fattymango/px-take-home/dto"
+	"github.com/fattymango/px-take-home/internal/task"
 	"github.com/fattymango/px-take-home/pkg/ctxstore"
 	"github.com/gofiber/fiber/v2"
 )
@@ -23,21 +26,26 @@ import (
 // @Security BearerAuth
 // @ID CreateTask
 func (s *Server) CreateTask(c *fiber.Ctx) error {
-	task := &dto.CrtTask{}
-	if err := c.BodyParser(task); err != nil {
+	crt := &dto.CrtTask{}
+	if err := c.BodyParser(crt); err != nil {
 		return dto.NewBadRequestResponse(c, err.Error())
 	}
 
-	if err := s.validator.Struct(task); err != nil {
+	if err := s.validator.Struct(crt); err != nil {
 		return dto.NewBadRequestResponse(c, err.Error())
 	}
 
-	err := s.TaskManager.CreateTask(task.ToTask())
+	task, err := s.TaskManager.CreateTask(crt.ToTask())
 	if err != nil {
 		return dto.NewInternalServerErrorResponse(c, err.Error())
 	}
 
-	return dto.NewSuccessResponse(c, task)
+	err = s.TaskManager.ExecuteTask(task)
+	if err != nil {
+		return dto.NewInternalServerErrorResponse(c, fmt.Sprintf("failed to execute task: %s", err))
+	}
+
+	return dto.NewSuccessResponse(c, dto.ToViewTask(task))
 }
 
 // @Tags Task
@@ -99,4 +107,34 @@ func (s *Server) GetTaskByID(c *fiber.Ctx) error {
 	}
 
 	return dto.NewSuccessResponse(c, dto.ToViewTask(task))
+}
+
+// @Tags Task
+// @Summary Cancel task
+// @Router /api/v1/tasks/{taskID}/cancel [delete]
+// @Security BearerAuth
+// @Description Cancel task
+// @Accept json
+// @Produce json
+//
+//	@Success	200	{object} dto.BaseResponse "Success"
+//	@Failure	400	{object} dto.BaseResponse	"Bad Request"
+//	@Failure	401	{object} dto.BaseResponse	"Unauthorized"
+//	@Failure	404	{object} dto.BaseResponse	"Not Found"
+//	@Failure	500	{object} dto.BaseResponse	"Internal Server Error"
+//
+// @Security BearerAuth
+// @ID CancelTask
+func (s *Server) CancelTask(c *fiber.Ctx) error {
+	taskID, err := ctxstore.GetTaskIDFromCtx(c)
+	if err != nil {
+		return dto.NewBadRequestResponse(c, err.Error())
+	}
+
+	err = s.TaskManager.CancelTask(taskID, task.ReasonCancelledByUser)
+	if err != nil {
+		return dto.NewInternalServerErrorResponse(c, err.Error())
+	}
+
+	return dto.NewSuccessResponse(c, nil)
 }

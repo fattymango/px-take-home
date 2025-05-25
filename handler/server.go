@@ -6,7 +6,6 @@ import (
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/internal/middleware"
 	"github.com/fattymango/px-take-home/internal/task"
-	"github.com/fattymango/px-take-home/pkg/cache"
 	"github.com/fattymango/px-take-home/pkg/db"
 	"github.com/fattymango/px-take-home/pkg/logger"
 	"github.com/go-playground/validator/v10"
@@ -18,17 +17,16 @@ type Server struct {
 	logger      *logger.Logger
 	App         *fiber.App
 	db          *db.DB
-	cache       *cache.Cache
 	validator   *validator.Validate
 	middlewares *Middlewares
 
 	*Services
 }
 
-func NewServer(cfg *config.Config, logger *logger.Logger, db *db.DB, cache *cache.Cache) (*Server, error) {
+func NewServer(cfg *config.Config, logger *logger.Logger, db *db.DB) (*Server, error) {
 	v := validator.New()
 
-	services := newServices(cfg, logger, db, cache)
+	services := newServices(cfg, logger, db)
 
 	middlewares := &Middlewares{
 		RateLimiter: middleware.RateLimiter(logger),
@@ -39,7 +37,6 @@ func NewServer(cfg *config.Config, logger *logger.Logger, db *db.DB, cache *cach
 		logger:      logger,
 		App:         fiber.New(),
 		db:          db,
-		cache:       cache,
 		validator:   v,
 		middlewares: middlewares,
 		Services:    services,
@@ -58,6 +55,12 @@ func (s *Server) Start() error {
 	return nil
 }
 
+func (s *Server) Stop() error {
+	s.logger.Info("Stopping server...")
+	s.TaskManager.Stop()
+	return s.App.Shutdown()
+}
+
 type Middlewares struct {
 	RateLimiter fiber.Handler
 	Logger      fiber.Handler
@@ -67,7 +70,7 @@ type Services struct {
 	TaskManager *task.TaskManager
 }
 
-func newServices(cfg *config.Config, logger *logger.Logger, db *db.DB, cache *cache.Cache) *Services {
+func newServices(cfg *config.Config, logger *logger.Logger, db *db.DB) *Services {
 	taskManager := task.NewTaskManager(cfg, logger, db)
 	taskManager.Start()
 	return &Services{
@@ -80,5 +83,5 @@ func (s *Server) WithTransaction() (*Services, func() error, func() error, error
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return newServices(s.config, s.logger, db, s.cache), commit, rollback, nil
+	return newServices(s.config, s.logger, db), commit, rollback, nil
 }

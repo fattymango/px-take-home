@@ -56,7 +56,7 @@ func (t *TaskDB) UpdateTask(task *model.Task) error {
 	return t.db.Updates(task).Error
 }
 func (t *TaskDB) CancelTask(id uint64, reason string) error {
-	return t.db.Model(&model.Task{}).Where("id = ?", id).Updates(map[string]interface{}{"reason": reason, "status": model.TaskStatus_Canceled}).Error
+	return t.db.Model(&model.Task{}).Where("id = ?", id).Updates(map[string]interface{}{"reason": reason, "status": model.TaskStatus_Cancelled}).Error
 }
 
 func (t *TaskDB) TaskFailed(id uint64, reason string, exitCode int) error {

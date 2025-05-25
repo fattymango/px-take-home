@@ -47,14 +47,19 @@ type CMD struct {
 	Validate bool `envconfig:"CMD_VALIDATE" default:"true"`
 }
 
+type TaskLogger struct {
+	DirPath string `envconfig:"TASK_LOGGER_DIR_PATH" default:"./task_logs"`
+}
+
 type Config struct {
-	DB      DB
-	Logger  Logger
-	Server  Server
-	Debug   Debug
-	Redis   Redis
-	Swagger Swagger
-	CMD     CMD
+	DB         DB
+	Logger     Logger
+	Server     Server
+	Debug      Debug
+	Redis      Redis
+	Swagger    Swagger
+	CMD        CMD
+	TaskLogger TaskLogger
 }
 
 func NewConfig() (*Config, error) {

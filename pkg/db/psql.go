@@ -85,7 +85,7 @@ func NewSQLiteDB(cfg *config.Config) (*DB, error) {
 		return nil, fmt.Errorf("database ping failed: %w", err)
 	}
 
-	return &DB{db.Debug(), cfg}, nil
+	return &DB{db, cfg}, nil
 }
 
 // NewTransaction creates a new db instance with a transaction

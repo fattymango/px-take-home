@@ -30,7 +30,7 @@ func (s *Server) RegisterRoutes() {
 
 	// Loging Middleware
 	root.Use(s.middlewares.Logger)
-	root.Use(s.middlewares.RateLimiter)
+	// root.Use(s.middlewares.RateLimiter)
 	// Swagger UI
 	root.Use(swagger.New(swagger.Config{
 		FilePath: s.config.Swagger.FilePath,
@@ -38,9 +38,8 @@ func (s *Server) RegisterRoutes() {
 		CacheAge: 1,
 	}))
 
-	root.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Hello, World!")
-	})
+	// Serve static web client files
+	root.Static("/", "./web")
 
 	api := root.Group("/api")
 	v1 := api.Group("/v1")
@@ -67,4 +66,6 @@ func (s *Server) RegisterTaskAPIs(router fiber.Router) {
 	task.Post("/", s.CreateTask)
 	task.Get("/", s.GetAllTasks)
 	task.Get("/:taskID", s.GetTaskByID)
+	task.Get("/:taskID/logs", s.GetTaskLogsByID)
+	task.Delete("/:taskID/cancel", s.CancelTask)
 }
