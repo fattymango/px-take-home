@@ -2,6 +2,7 @@ package task
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/internal/shell"
@@ -21,8 +22,8 @@ type JobExecutor struct {
 	logger *logger.Logger
 	job    *Job
 
-	stdoutChan chan string
-	stderrChan chan string
+	stdoutLoggerChan chan string
+	stderrLoggerChan chan string
 
 	taskLogger *tasklogger.TaskLogger
 
@@ -32,14 +33,14 @@ type JobExecutor struct {
 
 func NewJobExecutor(config *config.Config, logger *logger.Logger, job *Job, taskChan chan<- *JobMsg, logStream chan<- *LogMsg) *JobExecutor {
 	return &JobExecutor{
-		config:     config,
-		logger:     logger,
-		job:        job,
-		taskChan:   taskChan,
-		logStream:  logStream,
-		stdoutChan: make(chan string),
-		stderrChan: make(chan string),
-		taskLogger: tasklogger.NewTaskLogger(config, logger, job.task.ID),
+		config:           config,
+		logger:           logger,
+		job:              job,
+		taskChan:         taskChan,
+		logStream:        logStream,
+		stdoutLoggerChan: make(chan string),
+		stderrLoggerChan: make(chan string),
+		taskLogger:       tasklogger.NewTaskLogger(config, logger, job.task.ID),
 	}
 }
 
@@ -64,7 +65,7 @@ func (t *JobExecutor) Execute() error {
 	t.taskLogger.CreateLogFile()
 
 	executor := shell.NewShellExecutor(t.job.task.Command)
-	stdOutChan, stdErrChan, err := executor.Execute()
+	err = executor.Execute()
 	if err != nil {
 		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrFailedToExecute, err), 1)
 		return fmt.Errorf("%s: %s", ErrFailedToExecute, err)
@@ -72,24 +73,36 @@ func (t *JobExecutor) Execute() error {
 
 	t.logger.Infof("executing task #%d: %s, command: %s", t.job.task.ID, t.job.task.Name, t.job.task.Command)
 	t.sendTaskRunning()
-	t.taskLogger.ListenToStream(t.stdoutChan, t.stderrChan)
+	t.taskLogger.ListenToStream(t.stdoutLoggerChan, t.stderrLoggerChan)
 
 	var reason string
 
-	for stdOutChan != nil || stdErrChan != nil {
+	cmdStdOutChan, err := executor.StdOutPipe()
+	if err != nil {
+		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrFailedToExecute, err), 1)
+		return fmt.Errorf("%s: %s", ErrFailedToExecute, err)
+	}
+
+	cmdStdErrChan, err := executor.StdErrPipe()
+	if err != nil {
+		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrFailedToExecute, err), 1)
+		return fmt.Errorf("%s: %s", ErrFailedToExecute, err)
+	}
+
+	for cmdStdOutChan != nil || cmdStdErrChan != nil {
 		select {
-		case line, ok := <-stdErrChan:
+		case line, ok := <-cmdStdErrChan:
 			if !ok {
-				stdErrChan = nil
-				t.logger.Infof("stderr channel closed")
+				cmdStdErrChan = nil
+				t.logger.Infof("cmdStdErrChan channel closed")
 				continue
 			}
 			t.writeStderrLog(line)
 			reason += line
-		case line, ok := <-stdOutChan:
+		case line, ok := <-cmdStdOutChan:
 			if !ok {
-				stdOutChan = nil
-				t.logger.Infof("stdout channel closed")
+				cmdStdOutChan = nil
+				t.logger.Infof("cmdStdOutChan channel closed")
 				continue
 			}
 			t.writeStdoutLog(line)
@@ -100,12 +113,21 @@ func (t *JobExecutor) Execute() error {
 			if err != nil {
 				t.logger.Errorf("failed to cancel task: %s", err)
 			}
+			t.logger.Infof("executor cancelled")
 			exitCode, _ := executor.GetExitCode()
 			t.sendTaskCancelled(exitCode)
 			fmt.Printf("exit code: %d\n", exitCode)
 			return nil
 		}
 
+	}
+
+	time.Sleep(1 * time.Second)
+	// check if the task was cancelled
+	if t.job.ctx.Err() != nil {
+		t.logger.Infof("task was cancelled")
+		t.sendTaskCancelled(0)
+		return nil
 	}
 
 	fmt.Printf("finished reading logs\n")
@@ -150,20 +172,20 @@ func (t *JobExecutor) sendTaskCancelled(exitCode int) {
 }
 
 func (t *JobExecutor) writeStdoutLog(line string) {
-	t.stdoutChan <- fmt.Sprintf("%s\n", line)
+	t.stdoutLoggerChan <- fmt.Sprintf("%s\n", line)
 	t.logStream <- &LogMsg{TaskID: t.job.task.ID, Line: line}
 }
 
 func (t *JobExecutor) writeStderrLog(line string) {
-	t.stderrChan <- fmt.Sprintf("%s\n", line)
+	t.stderrLoggerChan <- fmt.Sprintf("%s\n", line)
 	t.logStream <- &LogMsg{TaskID: t.job.task.ID, Line: line}
 }
 
 func (t *JobExecutor) close() {
 	t.logger.Infof("closing task executor")
-	close(t.stdoutChan)
-	close(t.stderrChan)
+	close(t.stdoutLoggerChan)
+	close(t.stderrLoggerChan)
 	t.taskLogger.Close()
-	t.job.wg.Done()
-
+	t.logger.Infof("task executor closed")
+	t.job.Done()
 }

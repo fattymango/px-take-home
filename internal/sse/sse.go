@@ -7,6 +7,7 @@ import (
 
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/internal/task"
+	"github.com/fattymango/px-take-home/model"
 	"github.com/fattymango/px-take-home/pkg/logger"
 )
 
@@ -52,7 +53,7 @@ func (s *SseManager) Start() {
 					s.taskStream = nil
 					continue
 				}
-				s.logger.Info("Sending task status", "taskId", msg.TaskID, "status", msg.Status)
+				s.logger.Infof("Sending task status: %d, %s", msg.TaskID, model.TaskStatus_name[msg.Status])
 				s.sendTaskStatus(msg)
 			case msg, ok := <-s.logStream:
 				if !ok {
@@ -60,7 +61,7 @@ func (s *SseManager) Start() {
 					s.logStream = nil
 					continue
 				}
-				s.logger.Info("Sending log", "taskId", msg.TaskID, "log", msg.Line)
+				s.logger.Infof("Sending log: %d, %s", msg.TaskID, msg.Line)
 				s.sendLog(msg)
 			}
 		}
@@ -82,7 +83,7 @@ func (s *SseManager) sendTaskStatus(msg *task.TaskMsg) {
 	})
 
 	for client := range s.clients {
-		s.logger.Info("Sending task status to client", "client", client.ID, "taskID", msg.TaskID)
+		// s.logger.Info("Sending task status to client", "client", client.ID, "taskID", msg.TaskID)
 		client.Write(sseMessage)
 	}
 }
@@ -95,7 +96,7 @@ func (s *SseManager) sendLog(msg *task.LogMsg) {
 	})
 
 	for client := range s.clients {
-		s.logger.Info("Sending log to client", "client", client.ID, "taskID", msg.TaskID)
+		// s.logger.Info("Sending log to client", "client", client.ID, "taskID", msg.TaskID)
 		client.Write(sseMessage)
 	}
 }
