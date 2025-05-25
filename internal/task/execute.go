@@ -16,7 +16,7 @@ const (
 	ErrFailedToExecute  = "failed to execute command"
 )
 
-type TaskExecutor struct {
+type JobExecutor struct {
 	config *config.Config
 	logger *logger.Logger
 	job    *Job
@@ -26,28 +26,24 @@ type TaskExecutor struct {
 
 	taskLogger *tasklogger.TaskLogger
 
-	taskChan chan<- *JobMsg
+	taskChan  chan<- *JobMsg
+	logStream chan<- *LogMsg
 }
 
-func NewTaskExecutor(config *config.Config, logger *logger.Logger, job *Job, taskChan chan<- *JobMsg) *TaskExecutor {
-	return &TaskExecutor{
+func NewJobExecutor(config *config.Config, logger *logger.Logger, job *Job, taskChan chan<- *JobMsg, logStream chan<- *LogMsg) *JobExecutor {
+	return &JobExecutor{
 		config:     config,
 		logger:     logger,
 		job:        job,
 		taskChan:   taskChan,
+		logStream:  logStream,
 		stdoutChan: make(chan string),
 		stderrChan: make(chan string),
 		taskLogger: tasklogger.NewTaskLogger(config, logger, job.task.ID),
 	}
 }
 
-func (t *TaskExecutor) Execute() error {
-	// defer close(t.stdoutChan)
-	// defer close(t.stderrChan)
-	// defer t.job.wg.Done()
-	// defer func() {
-	// 	t.logger.Infof("task executor finished")
-	// }()
+func (t *JobExecutor) Execute() error {
 
 	defer t.close()
 
@@ -68,7 +64,7 @@ func (t *TaskExecutor) Execute() error {
 	t.taskLogger.CreateLogFile()
 
 	executor := shell.NewShellExecutor(t.job.task.Command)
-	stdOutChan, stdErrChan, exitCodeChan, err := executor.Execute()
+	stdOutChan, stdErrChan, err := executor.Execute()
 	if err != nil {
 		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrFailedToExecute, err), 1)
 		return fmt.Errorf("%s: %s", ErrFailedToExecute, err)
@@ -94,24 +90,28 @@ func (t *TaskExecutor) Execute() error {
 				stdOutChan = nil
 				t.logger.Infof("stdout channel closed")
 			}
-			fmt.Printf("stdout: %s", line)
 			t.writeStdoutLog(line)
 
 		case <-t.job.ctx.Done():
 			t.logger.Infof("context done, sending task cancelled")
-			t.sendTaskCancelled()
-			err := executor.Cancel()
+			err = executor.Cancel()
 			if err != nil {
 				t.logger.Errorf("failed to cancel task: %s", err)
 			}
+			exitCode, _ := executor.GetExitCode()
+			t.sendTaskCancelled(exitCode)
+			fmt.Printf("exit code: %d\n", exitCode)
 			return nil
 		}
 
 	}
 
 	fmt.Printf("finished reading logs\n")
-	exitCode := <-exitCodeChan
-	t.logger.Infof("exit code: %d", exitCode)
+	exitCode, err := executor.GetExitCode()
+	fmt.Printf("exit code: %d\n", exitCode)
+	if err != nil {
+		t.logger.Errorf("failed to get exit code: %s", err)
+	}
 	if exitCode != 0 {
 		t.sendTaskFailed(reason, exitCode)
 		return fmt.Errorf("%s: %d", ErrFailedToExecute, exitCode)
@@ -124,38 +124,40 @@ func (t *TaskExecutor) Execute() error {
 	return nil
 }
 
-func (t *TaskExecutor) sendTaskFailed(reason string, exitCode int) {
+func (t *JobExecutor) sendTaskFailed(reason string, exitCode int) {
 	t.job.task.Status = model.TaskStatus_Failed
 	t.job.task.Reason = reason
 	t.job.task.ExitCode = exitCode
 	t.taskChan <- &JobMsg{op: op_TASK_FAILED, taskID: t.job.task.ID, reason: reason, exitCode: exitCode}
 }
 
-func (t *TaskExecutor) sendTaskCompleted() {
+func (t *JobExecutor) sendTaskCompleted() {
 	t.job.task.Status = model.TaskStatus_Completed
 	t.job.task.ExitCode = 0
 	t.taskChan <- &JobMsg{op: op_TASK_COMPLETED, taskID: t.job.task.ID, exitCode: 0}
 }
 
-func (t *TaskExecutor) sendTaskRunning() {
+func (t *JobExecutor) sendTaskRunning() {
 	t.job.task.Status = model.TaskStatus_Running
 	t.taskChan <- &JobMsg{op: op_TASK_RUNNING, taskID: t.job.task.ID}
 }
 
-func (t *TaskExecutor) sendTaskCancelled() {
+func (t *JobExecutor) sendTaskCancelled(exitCode int) {
 	t.job.task.Status = model.TaskStatus_Cancelled
-	t.taskChan <- &JobMsg{op: op_CANCEL_TASK, taskID: t.job.task.ID, reason: ReasonCancelledBySystem}
+	t.taskChan <- &JobMsg{op: op_TASK_CANCELLED, taskID: t.job.task.ID, reason: ReasonCancelledBySystem, exitCode: exitCode}
 }
 
-func (t *TaskExecutor) writeStdoutLog(line string) {
+func (t *JobExecutor) writeStdoutLog(line string) {
 	t.stdoutChan <- fmt.Sprintf("%s\n", line)
+	t.logStream <- &LogMsg{TaskID: t.job.task.ID, Line: line}
 }
 
-func (t *TaskExecutor) writeStderrLog(line string) {
+func (t *JobExecutor) writeStderrLog(line string) {
 	t.stderrChan <- fmt.Sprintf("%s\n", line)
+	t.logStream <- &LogMsg{TaskID: t.job.task.ID, Line: line}
 }
 
-func (t *TaskExecutor) close() {
+func (t *JobExecutor) close() {
 	t.logger.Infof("closing task executor")
 	close(t.stdoutChan)
 	close(t.stderrChan)

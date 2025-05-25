@@ -10,6 +10,9 @@ const TaskStatus = {
     5: 'Canceled'
 };
 
+const MsgTypeLog = "log";
+const MsgTypeTaskStatus = "taskStatus";
+
 // DOM Elements
 const createTaskForm = document.getElementById('createTaskForm');
 const tasksList = document.getElementById('tasksList');
@@ -35,6 +38,9 @@ let currentLogState = {
     batchSize: 100,  // Initial batch size
     prefetchedLogs: null  // Store prefetched logs
 };
+
+// SSE connection
+let eventSource = null;
 
 // Event Listeners
 createTaskForm.addEventListener('submit', handleCreateTask);
@@ -149,7 +155,7 @@ function renderTasks(tasks) {
     }
 
     tasksList.innerHTML = tasks.map(task => `
-        <div class="task-item">
+        <div class="task-item" data-task-id="${task.id}">
             <h3>${task.name}</h3>
             <p><strong>Command:</strong> ${task.command}</p>
             <p><strong>Status:</strong> <span class="task-status status-${TaskStatus[task.status].toLowerCase()}">${TaskStatus[task.status]}</span></p>
@@ -166,7 +172,23 @@ async function showLogs(taskId) {
     currentLogState.taskId = taskId;
     logsModal.style.display = 'block';
     logsContent.innerHTML = 'Loading logs...';
+    
+    // Fetch initial logs
     await fetchLogs(taskId);
+    
+    // Clear any existing scroll event listener
+    logsContent.onscroll = null;
+    
+    // Add scroll event listener for infinite scrolling
+    logsContent.onscroll = () => {
+        if (logsContent.scrollTop === 0 && currentLogState.hasMoreAbove && !isLoadingLogs) {
+            const newFrom = Math.max(1, currentLogState.loadedLines.from - currentLogState.batchSize);
+            const newTo = currentLogState.loadedLines.from - 1;
+            if (newFrom < newTo) {
+                fetchLogs(taskId, newFrom, newTo);
+            }
+        }
+    };
 }
 
 async function handleLogsScroll() {
@@ -311,5 +333,104 @@ function renderLogs(logs, totalLines) {
     }
 }
 
-// Auto-refresh tasks every 5 seconds
-setInterval(fetchTasks, 20000); 
+function connectToSSE() {
+    if (eventSource) {
+        eventSource.close();
+    }
+
+    console.log('Connecting to SSE...');
+    eventSource = new EventSource(`${API_BASE_URL}/events`);
+
+    // Handle connection event
+    eventSource.addEventListener('connect', (e) => {
+        console.log('SSE Connected:', e.data);
+    });
+
+    // Handle all messages through onmessage
+    eventSource.onmessage = (e) => {
+        console.log('Received SSE message:', e.data);
+        try {
+            const message = JSON.parse(e.data);
+            
+            switch (message.event) {
+                case MsgTypeLog:
+                    handleLogMessage(message);
+                    break;
+                case MsgTypeTaskStatus:
+                    handleTaskStatusMessage(message);
+                    break;
+                default:
+                    console.warn('Unknown event type:', message.event);
+            }
+        } catch (error) {
+            console.error('Error processing SSE message:', error, e.data);
+        }
+    };
+
+    eventSource.onopen = () => {
+        console.log('SSE connection opened');
+    };
+
+    eventSource.onerror = (error) => {
+        console.error('SSE connection error:', error);
+        eventSource.close();
+        // Try to reconnect after a delay
+        setTimeout(connectToSSE, 5000);
+    };
+}
+
+function handleLogMessage(data) {
+    const taskId = parseInt(data.taskID);
+    if (taskId === currentTaskId) {
+        // Append new log line
+        const logLine = document.createElement('div');
+        logLine.textContent = data.value;
+        logsContent.appendChild(logLine);
+        logsContent.scrollTop = logsContent.scrollHeight;
+        
+        // Update total lines count
+        currentLogState.totalLines++;
+        currentLogState.loadedLines.to = currentLogState.totalLines;
+
+        // Update header
+        const header = document.querySelector('.logs-header');
+        if (header) {
+            header.textContent = `Showing lines ${currentLogState.loadedLines.from}-${currentLogState.loadedLines.to} of ${currentLogState.totalLines}`;
+        }
+    }
+}
+
+function handleTaskStatusMessage(data) {
+    const taskId = parseInt(data.taskID);
+    // Find the task element and update its status
+    const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
+    if (taskElement) {
+        const statusElement = taskElement.querySelector('.task-status');
+        const newStatus = TaskStatus[data.value];
+        statusElement.textContent = newStatus;
+        statusElement.className = `task-status status-${newStatus.toLowerCase()}`;
+    } else {
+        // If the task element doesn't exist, refresh the entire task list
+        fetchTasks();
+    }
+}
+
+// Connect to SSE when the page loads
+connectToSSE();
+
+// Update cleanup when closing modal
+function closeLogsModal() {
+    logsModal.style.display = 'none';
+    currentTaskId = null;
+    resetLogState();
+    logsContent.onscroll = null;
+}
+
+closeModalBtn.addEventListener('click', closeLogsModal);
+
+// Cleanup SSE connection when the page is unloaded
+window.addEventListener('beforeunload', () => {
+    if (eventSource) {
+        eventSource.close();
+    }
+}); 

@@ -13,9 +13,10 @@ type TaskRepository interface {
 	GetTask(id uint64) (*model.Task, error)
 	UpdateTask(task *model.Task) error
 	UpdateTaskStatus(id uint64, status model.TaskStatus) error
-	CancelTask(id uint64, reason string) error
+	TaskCancelled(id uint64, reason string, exitCode int) error
 	TaskFailed(id uint64, reason string, exitCode int) error
 	TaskCompleted(id uint64, exitCode int) error
+	TaskRunning(id uint64) error
 }
 
 type TaskDB struct {
@@ -55,8 +56,8 @@ func (t *TaskDB) UpdateTaskStatus(id uint64, status model.TaskStatus) error {
 func (t *TaskDB) UpdateTask(task *model.Task) error {
 	return t.db.Updates(task).Error
 }
-func (t *TaskDB) CancelTask(id uint64, reason string) error {
-	return t.db.Model(&model.Task{}).Where("id = ?", id).Updates(map[string]interface{}{"reason": reason, "status": model.TaskStatus_Cancelled}).Error
+func (t *TaskDB) TaskCancelled(id uint64, reason string, exitCode int) error {
+	return t.db.Model(&model.Task{}).Where("id = ?", id).Updates(map[string]interface{}{"reason": reason, "status": model.TaskStatus_Cancelled, "exit_code": exitCode}).Error
 }
 
 func (t *TaskDB) TaskFailed(id uint64, reason string, exitCode int) error {
@@ -65,4 +66,8 @@ func (t *TaskDB) TaskFailed(id uint64, reason string, exitCode int) error {
 
 func (t *TaskDB) TaskCompleted(id uint64, exitCode int) error {
 	return t.db.Model(&model.Task{}).Where("id = ?", id).Updates(map[string]interface{}{"status": model.TaskStatus_Completed, "exit_code": exitCode}).Error
+}
+
+func (t *TaskDB) TaskRunning(id uint64) error {
+	return t.db.Model(&model.Task{}).Where("id = ?", id).Updates(map[string]interface{}{"status": model.TaskStatus_Running}).Error
 }

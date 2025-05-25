@@ -131,7 +131,7 @@ func (s *Server) CancelTask(c *fiber.Ctx) error {
 		return dto.NewBadRequestResponse(c, err.Error())
 	}
 
-	err = s.TaskManager.CancelTask(taskID, task.ReasonCancelledByUser)
+	err = s.TaskManager.CancelTask(taskID, task.ReasonCancelledByUser, -1)
 	if err != nil {
 		return dto.NewInternalServerErrorResponse(c, err.Error())
 	}

@@ -24,6 +24,14 @@ func NewJob(wg *sync.WaitGroup, task *model.Task) *Job {
 		wg:     wg,
 	}
 }
+func (j *Job) Cancel() {
+	j.cancel()
+	// j.wg.Wait()
+}
+
+func (j *Job) Wait() {
+	j.wg.Wait()
+}
 
 type JobCache interface {
 	GetJob(id uint64) (*Job, error)

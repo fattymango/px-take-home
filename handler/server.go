@@ -5,6 +5,7 @@ import (
 
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/internal/middleware"
+	"github.com/fattymango/px-take-home/internal/sse"
 	"github.com/fattymango/px-take-home/internal/task"
 	"github.com/fattymango/px-take-home/pkg/db"
 	"github.com/fattymango/px-take-home/pkg/logger"
@@ -21,6 +22,7 @@ type Server struct {
 	middlewares *Middlewares
 
 	*Services
+	sseManager *sse.SseManager
 }
 
 func NewServer(cfg *config.Config, logger *logger.Logger, db *db.DB) (*Server, error) {
@@ -40,6 +42,7 @@ func NewServer(cfg *config.Config, logger *logger.Logger, db *db.DB) (*Server, e
 		validator:   v,
 		middlewares: middlewares,
 		Services:    services,
+		sseManager:  sse.NewSseManager(cfg, logger, services.TaskManager.TaskStream(), services.TaskManager.LogStream()),
 	}, nil
 }
 
@@ -47,7 +50,7 @@ func (s *Server) Start() error {
 	s.logger.Info("Starting server...")
 	s.registerValidator()
 	s.RegisterRoutes()
-
+	s.sseManager.Start()
 	err := s.App.Listen(":" + s.config.Server.Port)
 	if err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
@@ -58,6 +61,7 @@ func (s *Server) Start() error {
 func (s *Server) Stop() error {
 	s.logger.Info("Stopping server...")
 	s.TaskManager.Stop()
+	s.sseManager.Stop()
 	return s.App.Shutdown()
 }
 
