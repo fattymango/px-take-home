@@ -79,6 +79,7 @@ func (t *TaskLogger) ListenToStream(stdout, stderr <-chan string) {
 				}
 				t.Write([]byte(line))
 			case <-t.ctx.Done():
+				t.logger.Infof("task logger context done")
 				return
 			}
 		}

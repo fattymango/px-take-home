@@ -3,6 +3,7 @@ package task
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/internal/logreader"
@@ -102,11 +103,12 @@ func (t *TaskManager) Stop() {
 		job.Cancel()
 		job.Wait()
 	}
-	// time.Sleep(1 * time.Second)
-	t.jobsWg.Wait()
+	time.Sleep(5 * time.Second)
 	t.logger.Infof("waiting for tasks to finish")
-	close(t.taskChan)
+	t.jobsWg.Wait()
 	t.logger.Infof("tasks finished")
+	close(t.taskChan)
+	t.logger.Infof("waiting for task manager to finish")
 	t.wg.Wait()
 	close(t.logStream)
 	close(t.taskStream)
@@ -214,7 +216,7 @@ func (t *TaskManager) ExecuteTask(task *model.Task) error {
 		executor := NewJobExecutor(t.config, t.logger, job, t.taskChan, t.logStream)
 		err := executor.Execute()
 		if err != nil {
-			t.logger.Errorf("failed to execute task: %s", err)
+			t.logger.Errorf("failed to execute job #%d: %s", job.task.ID, err)
 		}
 	}()
 
