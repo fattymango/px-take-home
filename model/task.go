@@ -7,7 +7,7 @@ const (
 	TaskStatus_Running
 	TaskStatus_Completed
 	TaskStatus_Failed
-	TaskStatus_Canceled
+	TaskStatus_Cancelled
 )
 
 var (
@@ -16,14 +16,14 @@ var (
 		TaskStatus_Running:   "running",
 		TaskStatus_Completed: "completed",
 		TaskStatus_Failed:    "failed",
-		TaskStatus_Canceled:  "canceled",
+		TaskStatus_Cancelled: "canceled",
 	}
 	TaskStatus_value = map[string]TaskStatus{
 		"queued":    TaskStatus_Queued,
 		"running":   TaskStatus_Running,
 		"completed": TaskStatus_Completed,
 		"failed":    TaskStatus_Failed,
-		"canceled":  TaskStatus_Canceled,
+		"canceled":  TaskStatus_Cancelled,
 	}
 )
 

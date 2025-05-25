@@ -165,3 +165,7 @@ fresh-start:
 install-deps:
 	@go mod tidy
 	@sudo apt  install shellcheck
+
+.PHONY: clean
+clean:
+	@rm -r task_logs

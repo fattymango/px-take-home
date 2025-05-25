@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager API Client</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Task Manager</h1>
+        
+        <div class="create-task-section">
+            <h2>Create New Task</h2>
+            <form id="createTaskForm">
+                <input type="text" id="taskName" placeholder="Task Name" required>
+                <input type="text" id="taskCommand" placeholder="Command" required>
+                <button type="submit">Create Task</button>
+            </form>
+        </div>
+
+        <div class="tasks-section">
+            <h2>Tasks</h2>
+            <button id="refreshTasks">Refresh Tasks</button>
+            <div id="tasksList" class="tasks-list">
+                <!-- Tasks will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div id="logsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Task Logs</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="logs-controls">
+                    <button id="refreshLogs">Refresh Logs</button>
+                    <div class="logs-navigation">
+                        <input type="number" id="fromLine" placeholder="From line">
+                        <input type="number" id="toLine" placeholder="To line">
+                        <button id="fetchRange">Fetch Range</button>
+                    </div>
+                </div>
+                <div id="logsContent" class="logs-content">
+                    <!-- Logs will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 

@@ -12,16 +12,34 @@ definitions:
       success:
         type: boolean
     type: object
+  dto.TaskLogFilter:
+    properties:
+      from:
+        type: integer
+      to:
+        type: integer
+    type: object
   dto.ViewTask:
     properties:
       command:
         type: string
+      exit_code:
+        type: integer
       id:
         type: integer
       name:
         type: string
+      reason:
+        type: string
       status:
         $ref: '#/definitions/model.TaskStatus'
+    type: object
+  dto.ViewTaskLogs:
+    properties:
+      logs:
+        items:
+          type: string
+        type: array
     type: object
   model.TaskStatus:
     enum:
@@ -50,18 +68,12 @@ info:
   title: PX Take Home API Specification
   version: 0.0.1
 paths:
-  /api/v1/{templateID}:
+  /api/v1/tasks:
     get:
       consumes:
       - application/json
-      description: Get a template by ID
-      operationId: GetTemplateByID
-      parameters:
-      - description: Template ID
-        in: path
-        name: templateID
-        required: true
-        type: string
+      description: Get all tasks
+      operationId: GetAllTasks
       produces:
       - application/json
       responses:
@@ -88,9 +100,125 @@ paths:
       security:
       - BearerAuth: []
       - BearerAuth: []
-      summary: Get template by ID
+      summary: Get all tasks
       tags:
-      - Template
+      - Task
+    post:
+      consumes:
+      - application/json
+      description: Create task
+      operationId: CreateTask
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: '#/definitions/dto.ViewTask'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+      security:
+      - BearerAuth: []
+      - BearerAuth: []
+      summary: Create task
+      tags:
+      - Task
+  /api/v1/tasks/{taskID}:
+    get:
+      consumes:
+      - application/json
+      description: Get task by ID
+      operationId: GetTaskByID
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: '#/definitions/dto.ViewTask'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+      security:
+      - BearerAuth: []
+      - BearerAuth: []
+      summary: Get task by ID
+      tags:
+      - Task
+  /api/v1/tasks/{taskID}/logs:
+    get:
+      consumes:
+      - application/json
+      description: Get task logs by ID
+      operationId: GetTaskLogsByID
+      parameters:
+      - description: Task ID
+        in: path
+        name: taskID
+        required: true
+        type: integer
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TaskLogFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: '#/definitions/dto.ViewTaskLogs'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+      security:
+      - BearerAuth: []
+      - BearerAuth: []
+      summary: Get task logs by ID
+      tags:
+      - Task Logs
 schemes:
 - http
 securityDefinitions:
