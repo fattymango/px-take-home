@@ -34,3 +34,20 @@ func ToViewTask(t *model.Task) *ViewTask {
 		ExitCode: t.ExitCode,
 	}
 }
+
+type ListTasks struct {
+	Tasks []*ViewTask `json:"tasks"`
+	Total int64       `json:"total"`
+}
+
+func ToListTasks(tasks []*model.Task, total int64) *ListTasks {
+	viewTasks := make([]*ViewTask, len(tasks))
+	for i, task := range tasks {
+		viewTasks[i] = ToViewTask(task)
+	}
+
+	return &ListTasks{
+		Tasks: viewTasks,
+		Total: total,
+	}
+}

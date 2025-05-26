@@ -1,6 +1,13 @@
 // API Configuration
 const API_BASE_URL = 'http://localhost:8888/api/v1';
 
+// Pagination State
+let paginationState = {
+    currentPage: 1,
+    pageSize: 10,
+    totalTasks: 0
+};
+
 // Task Status Mapping
 const TaskStatus = {
     1: 'Queued',
@@ -25,6 +32,10 @@ const refreshLogsBtn = document.getElementById('refreshLogs');
 const fromLineInput = document.getElementById('fromLine');
 const toLineInput = document.getElementById('toLine');
 const fetchRangeBtn = document.getElementById('fetchRange');
+const prevPageBtn = document.getElementById('prevPage');
+const nextPageBtn = document.getElementById('nextPage');
+const pageSizeSelect = document.getElementById('pageSize');
+const pageInfo = document.getElementById('pageInfo');
 
 let currentTaskId = null;
 let isLoadingLogs = false;
@@ -51,7 +62,7 @@ const RENDER_DELAY = 16; // Roughly 60fps
 
 // Event Listeners
 createTaskForm.addEventListener('submit', handleCreateTask);
-refreshButton.addEventListener('click', fetchTasks);
+refreshButton.addEventListener('click', () => fetchTasks());
 closeModalBtn.addEventListener('click', () => {
     logsModal.style.display = 'none';
     currentTaskId = null;
@@ -70,6 +81,21 @@ fetchRangeBtn.addEventListener('click', () => {
         resetLogState();
         fetchLogs(currentTaskId, from, to);
     }
+});
+prevPageBtn.addEventListener('click', () => {
+    if (paginationState.currentPage > 1) {
+        paginationState.currentPage--;
+        fetchTasks();
+    }
+});
+nextPageBtn.addEventListener('click', () => {
+    paginationState.currentPage++;
+    fetchTasks();
+});
+pageSizeSelect.addEventListener('change', (e) => {
+    paginationState.pageSize = parseInt(e.target.value);
+    paginationState.currentPage = 1; // Reset to first page when changing page size
+    fetchTasks();
 });
 
 // Close modal when clicking outside
@@ -138,7 +164,8 @@ async function handleCreateTask(e) {
 
 async function fetchTasks() {
     try {
-        const response = await fetch(`${API_BASE_URL}/tasks`);
+        const offset = (paginationState.currentPage - 1) * paginationState.pageSize;
+        const response = await fetch(`${API_BASE_URL}/tasks?offset=${offset}&limit=${paginationState.pageSize}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -146,6 +173,7 @@ async function fetchTasks() {
         const result = await response.json();
         if (result.success) {
             renderTasks(result.data);
+            updatePaginationControls(result.data);
         } else {
             throw new Error(result.error);
         }
@@ -155,7 +183,8 @@ async function fetchTasks() {
     }
 }
 
-function renderTasks(tasks) {
+function renderTasks(data) {
+    const { tasks, total } = data;
     if (!tasks || tasks.length === 0) {
         tasksList.innerHTML = '<p>No tasks found.</p>';
         return;
@@ -187,6 +216,23 @@ function renderTasks(tasks) {
             </div>
         </div>
     `}).join('');
+}
+
+function updatePaginationControls(data) {
+    const { tasks, total } = data;
+    paginationState.totalTasks = total;
+    
+    // Disable previous button if we're on the first page
+    prevPageBtn.disabled = paginationState.currentPage === 1;
+    
+    // Calculate total pages
+    const totalPages = Math.ceil(total / paginationState.pageSize);
+    
+    // Disable next button if we're on the last page
+    nextPageBtn.disabled = paginationState.currentPage >= totalPages;
+    
+    // Update page info with more details
+    pageInfo.textContent = `Page ${paginationState.currentPage} of ${totalPages} (${total} total tasks)`;
 }
 
 async function showLogs(taskId) {

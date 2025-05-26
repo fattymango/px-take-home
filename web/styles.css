@@ -300,4 +300,52 @@ button:hover {
     color: #721c24;
     background-color: #f8d7da;
     border: 1px solid #f5c6cb;
+}
+
+/* Pagination Controls */
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1rem 0;
+    padding: 0.5rem;
+    background: #f5f5f5;
+    border-radius: 4px;
+}
+
+.pagination-controls button {
+    padding: 0.5rem 1rem;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.pagination-controls button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.pagination-controls button:hover:not(:disabled) {
+    background: #0056b3;
+}
+
+.pagination-controls #pageInfo {
+    font-weight: 500;
+    color: #333;
+}
+
+.pagination-controls #pageSize {
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+}
+
+.pagination-controls #pageSize:focus {
+    outline: none;
+    border-color: #007bff;
 } 

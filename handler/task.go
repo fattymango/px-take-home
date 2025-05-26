@@ -65,18 +65,14 @@ func (s *Server) CreateTask(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @ID GetAllTasks
 func (s *Server) GetAllTasks(c *fiber.Ctx) error {
-	tasks, err := s.TaskManager.GetAllTasks()
+	offset, limit := ctxstore.GetOffsetLimitFromCtx(c)
+
+	tasks, total, err := s.TaskManager.GetAllTasks(offset, limit)
 	if err != nil {
 		return dto.NewInternalServerErrorResponse(c, err.Error())
 	}
 
-	viewTasks := make([]*dto.ViewTask, len(tasks))
-	for i, task := range tasks {
-		viewTasks[i] = dto.ToViewTask(task)
-	}
-
-	return dto.NewSuccessResponse(c, viewTasks)
-
+	return dto.NewSuccessResponse(c, dto.ToListTasks(tasks, total))
 }
 
 // @Tags Task

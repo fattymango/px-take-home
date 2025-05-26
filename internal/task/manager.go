@@ -193,13 +193,13 @@ func (t *TaskManager) GetTask(id uint64) (*model.Task, error) {
 	return task, nil
 }
 
-func (t *TaskManager) GetAllTasks() ([]*model.Task, error) {
-	tasks, err := t.repo.GetAllTasks()
+func (t *TaskManager) GetAllTasks(offset, limit int) ([]*model.Task, int64, error) {
+	tasks, total, err := t.repo.GetAllTasks(offset, limit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get all tasks from db: %w", err)
+		return nil, 0, fmt.Errorf("failed to get all tasks from db: %w", err)
 	}
 
-	return tasks, nil
+	return tasks, total, nil
 }
 
 func (t *TaskManager) CancelTask(taskID uint64, reason string, exitCode int) error {
