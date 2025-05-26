@@ -178,8 +178,8 @@ function renderTasks(tasks) {
             <div class="task-info">
                 <p><strong>Command:</strong> ${task.command}</p>
                 <p><strong>Status:</strong> <span class="task-status status-${statusLower}">${status}</span></p>
-                ${task.exit_code !== undefined ? `<p><strong>Exit Code:</strong> ${task.exit_code}</p>` : ''}
-                ${task.reason ? `<p><strong>Reason:</strong> ${task.reason}</p>` : ''}
+                <p class="exit-code"${task.exit_code === undefined ? ' style="display:none"' : ''}><strong>Exit Code:</strong> ${task.exit_code !== undefined ? task.exit_code : ''}</p>
+                <p class="reason"${!task.reason ? ' style="display:none"' : ''}><strong>Reason:</strong> ${task.reason || ''}</p>
                 <div class="task-actions">
                     <button onclick="showLogs(${task.id})" class="view-logs-btn">View Logs</button>
                     ${actionButtons}
@@ -371,19 +371,36 @@ function connectToSSE() {
 
     // Handle all messages through onmessage
     eventSource.onmessage = (e) => {
-        console.log('Received SSE message:', e.data);
         try {
-            const message = JSON.parse(e.data);
+            // Remove "data: " prefix and parse the JSON
+            const rawData = e.data.replace(/^data: /, '');
+            const data = JSON.parse(rawData);
             
-            switch (parseInt(message.event)) {
+            // Log the parsed message for debugging
+            console.debug('Parsed SSE message:', data);
+            
+            // Handle ping messages
+            if (data.ping !== undefined) {
+                console.debug('Received ping:', data.ping);
+                return;
+            }
+            
+            // Handle regular messages
+            const eventType = parseInt(data.event);
+            if (isNaN(eventType)) {
+                console.warn('Invalid event type:', data.event);
+                return;
+            }
+
+            switch (eventType) {
                 case MsgTypeLog:
-                    handleLogMessage(message);
+                    handleLogMessage(data);
                     break;
                 case MsgTypeTaskStatus:
-                    handleTaskStatusMessage(message);
+                    handleTaskStatusMessage(data);
                     break;
                 default:
-                    console.warn('Unknown event type:', message.event);
+                    console.warn('Unknown event type:', eventType);
             }
         } catch (error) {
             console.error('Error processing SSE message:', error, e.data);
@@ -403,10 +420,16 @@ function connectToSSE() {
 }
 
 function handleLogMessage(data) {
-    const taskId = parseInt(data.taskID);
+    const taskId = parseInt(data.task_id);
     if (taskId === currentTaskId) {
-        // Add to buffer
-        logBuffer.push(data.value);
+        // Add to buffer with line number
+        const logValue = data.value;
+        const logEntry = {
+            line: logValue.line,
+            lineNumber: logValue.line_number
+        };
+
+        logBuffer.push(logEntry);
         
         // Update state
         currentLogState.totalLines++;
@@ -437,7 +460,8 @@ function flushLogBuffer() {
     // Create elements for all buffered logs
     logBuffer.forEach(log => {
         const logLine = document.createElement('div');
-        logLine.textContent = log;
+        logLine.className = 'log-line';
+        logLine.innerHTML = `<span class="log-message">${log.line}</span>`;
         fragment.appendChild(logLine);
     });
 
@@ -483,14 +507,59 @@ function trimOldLogs() {
 setInterval(trimOldLogs, 5000);
 
 function handleTaskStatusMessage(data) {
-    const taskId = parseInt(data.taskID);
+    const taskId = parseInt(data.task_id);
+    const taskValue = data.value;
+    
     // Find the task element and update its status
     const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
     if (taskElement) {
         const statusElement = taskElement.querySelector('.task-status');
-        const newStatus = TaskStatus[data.value];
+        const newStatus = TaskStatus[taskValue.status];
         statusElement.textContent = newStatus;
         statusElement.className = `task-status status-${newStatus.toLowerCase()}`;
+
+        // Get the task info container
+        const taskInfo = taskElement.querySelector('.task-info');
+
+        // Update exit code
+        const exitCodeElement = taskElement.querySelector('.exit-code');
+        if (exitCodeElement) {
+            if (taskValue.exit_code !== undefined && taskValue.exit_code !== null) {
+                exitCodeElement.innerHTML = `<strong>Exit Code:</strong> ${taskValue.exit_code}`;
+                exitCodeElement.style.display = '';
+            } else {
+                exitCodeElement.style.display = 'none';
+            }
+        }
+
+        // Update reason
+        const reasonElement = taskElement.querySelector('.reason');
+        if (reasonElement) {
+            if (taskValue.reason) {
+                reasonElement.innerHTML = `<strong>Reason:</strong> ${taskValue.reason}`;
+                reasonElement.style.display = '';
+            } else {
+                reasonElement.style.display = 'none';
+            }
+        }
+
+        // Update action buttons based on new status
+        const actionButtons = taskElement.querySelector('.task-actions');
+        const statusLower = newStatus.toLowerCase();
+        if (statusLower === 'queued' || statusLower === 'running') {
+            if (!actionButtons.querySelector('.cancel-btn')) {
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'cancel-btn';
+                cancelBtn.textContent = 'Cancel';
+                cancelBtn.onclick = () => cancelTask(taskId);
+                actionButtons.appendChild(cancelBtn);
+            }
+        } else {
+            const cancelBtn = actionButtons.querySelector('.cancel-btn');
+            if (cancelBtn) {
+                cancelBtn.remove();
+            }
+        }
     } else {
         // If the task element doesn't exist, refresh the entire task list
         fetchTasks();

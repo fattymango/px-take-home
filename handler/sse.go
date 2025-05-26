@@ -24,11 +24,12 @@ func (s *Server) SSE(c *fiber.Ctx) error {
 		}
 
 		client := s.sseManager.NewSSEClient(w)
-		s.logger.Info("SSE connection client created", "client", client.ID)
+		s.logger.Infof("SSE connection client created: %s", client.ID)
 
 		client.Wait()
 
-		s.logger.Info("SSE connection closed")
+		s.logger.Infof("SSE connection closed: %s", client.ID)
+		s.sseManager.RemoveSSEClient(client.ID)
 	}))
 
 	return nil

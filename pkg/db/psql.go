@@ -36,7 +36,7 @@ func retryWithBackoff(attempts int, sleep time.Duration, fn func() error) error 
 // NewSQLiteDB initializes a new PostgreSQL database connection with retries & timeout
 func NewSQLiteDB(cfg *config.Config) (*DB, error) {
 	// Set a GORM logger with better logging levels
-	gormLogger := logger.Default.LogMode(logger.Info)
+	gormLogger := logger.Default.LogMode(logger.Silent)
 
 	var db *gorm.DB
 	var err error
