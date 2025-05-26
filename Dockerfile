@@ -1,10 +1,17 @@
-FROM scratch
+FROM golang:latest
+
 
 WORKDIR /app
 
-COPY ./bin/server /app/server
-# RUN chmod +x /app/server
+# Copy source and go modules
+COPY go.mod go.sum ./
+RUN go mod download && go mod tidy
+
+COPY . .
+
+# Build the Go binary with CGO enabled
+ENV CGO_ENABLED=1
+RUN go build -o server ./cmd/api/
 
 
 CMD ["/app/server"]
- 

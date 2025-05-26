@@ -1,154 +1,186 @@
+# Web-Based Task Manager
+This is a web-based task manager that allows user to submit long running tasks that run asynchronously and track the status and logs of the task.
+This project was made as a take-home assignment for Proxidize.
 
+## Architecture
+![Architecture](./docs/high_level.excalidraw.png)
 
-## Documentation
-Refer to [docs](./docs/) and wiki for the API documentation.
+## Setup
 
-## Run
-### Dependencies
-To run the server, you need to have [Docker](https://docs.docker.com/get-docker/) installed.
-then start the docker compose file in the root directory.
+### Prerequisites
+- Go
+- Docker (optional, for running the server as a container)
+- Make (optional, for easier commands)
 
+### Running the server
+#### Run Manually
 using `Makefile`
-```bash
-make up
-```
-
-or manually using `docker compose`
-```bash
-docker compose up -d
-```
-
-
-### Environment Variables
-
-The server uses environment variables to configure the database connection and other settings.
-
-Load the environment variables from the `export.sh` file:
-
-```bash
-source export.sh
-```
-
-### gRPC Setup
-
-To generate the proto files, you can use the `Makefile` to generate the proto files.
-
-First install the dependencies if not installed already
-```bash
-make init
-```
-
-Then generate the proto files
-```bash
-make proto
-```
-
-### Run the server
-
-To run the server, you can use `Makefile` to start the server and other services.
-
 ```bash
 make run
 ```
-
-or manually start the server
+or manually
 
 ```bash
 go run cmd/api/main.go
 ```
 
-
-
-## Seed 
-
-To seed the database, you can use the `Makefile` to seed the database.
-
-*Note: To run the seed, you need to have the dependencies running and the environment variables loaded.*
-
+#### Run as a container
 ```bash
-make seed
-```
-
-## API Documentation
-
-API documentation is generated using Swagger. To access the documentation:
-
-1. Run the server
-2. Navigate to `http://localhost:8888/api/v1/docs#/`
-
-To regenerate the Swagger documentation after making changes:
-
-```bash
-make swagger
+make docker-build
+make docker-run
 ```
 
 or manually
 
 ```bash
-go get github.com/swaggo/swag@master
-swag init  --parseDependency -g ./cmd/api/main.go -o ./api/swagger 
+docker build -t px-task-manager .
+docker run -d -p 8888:8888 px-task-manager
 ```
 
 
-## Docker Deployment
+## Usage
 
-**Build and push Docker image**:
+Navigate to `http://localhost:8888` to access the task manager web client.
+
+### Create a new task
+Fill in the task name and command to run.
+
+Then click on the "Create Task" button to create the task.
+
+![alt](./docs/img/create_task.png)
+
+### View all tasks
+
+Below the create task form, you can see all the tasks created and the status and exit code of the task.
+
+![alt](./docs/img/view_tasks.png)
+
+
+### Cancel a task
+
+Click on the `Cancel` button to cancel the task, the button only appears when the task is running.
+
+![alt](./docs/img/cancel_task.png)
+
+When the task is cancelled, the task will be shown in the main page with a `Cancelled` status.
+
+![alt](./docs/img/canceled_task.png)
+
+
+
+### View task logs
+
+Click on `View Logs` button to view the logs of the task.
+
+![alt](./docs/img/view_task_logs_button.png)
+
+Then you can see the logs of the task, if the task is still running, you can see the logs in real time.
+
+![alt](./docs/img/view_task_logs.png)
+
+
+
+## API Specification
+
+### Swagger
+If swagger specification does not exist, you can generate it using the following command:
+
 ```bash
-make push-dev
+make swagger
 ```
 
+To access the documentation:
 
-## Project Structure
+#### Web
+1. Run the server
+2. Navigate to `http://localhost:8888/api/v1/docs#/`
 
-```
-server/
-├── api/              # API definitions and Swagger documentation
-├── app/              # Application initialization and configuration
-├── bin/              # Compiled binaries
-├── cmd/              # Entry points for applications
-│   ├── api/          # Main API server
-│   ├── migrate/      # Database migration tool
-│   └── seed/         # Database seeding tool
-├── docs/             # Documentation
-├── dto/              # Data Transfer Objects (request/response models)
-├── handler/          # HTTP request handlers
-├── internal/         # Internal packages (core business logic)
-│   ├── appointment/  # Appointment module
-│   ├── authentication/ # Authentication module
-│   ├── user/         # User module
-│   ├── business/     # Business module
-│   ├── ... other modules          # Car module
-│   ├── casbin/       # Casbin authorization
-│   ├── middleware/   # HTTP middleware
-│   ├── shared/       # Shared data models and utilities
-│   ├── utils/        # Utility functions
-└── pkg/              # Shared libraries and wrappers
-```
+#### Local Files
+Or find the generated swagger files in the `api/swagger` directory.
 
-### Key Components
-- **cmd**: Contains the main entry points for the application
-- **app**: Application initialization and configuration
-- **dto**: Contains data transfer objects for API requests and responses
-- **handler**: HTTP request handlers for each module
-- **internal**: Core business logic organized by domain
-- **pkg**: Shared libraries and wrappers
-- **api**: API definitions and Swagger documentation
-- **docs**: Documentation
+## API Documentation
 
+### API Endpoints
 
+#### Tasks
 
-### Branch and Commit Conventions
+##### Create Task
+- **Method**: POST
+- **Path**: `/api/v1/tasks`
+- **Payload**:
+  ```json
+  {
+    "name": "string",
+    "command": "string"
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "id": "string",
+    "name": "string",
+    "command": "string",
+    "status": "string",
+    "created_at": "timestamp"
+  }
+  ```
 
-- **Branch Name**: `{ticket_id}-{ticket_description}`
-- **Commit Message**: `{ticket_id} - {brief_description_of_the_changes}`
-- **MR Title**: Use gitlab merge request tool to create a new merge request.
+##### Get All Tasks
+- **Method**: GET
+- **Path**: `/api/v1/tasks`
+- **Response**:
+  ```json
+  {
+    "tasks": [
+      {
+        "id": "string",
+        "name": "string",
+        "command": "string",
+        "status": "string",
+        "created_at": "timestamp"
+      }
+    ]
+  }
+  ```
 
+##### Get Task by ID
+- **Method**: GET
+- **Path**: `/api/v1/tasks/:taskID`
+- **Response**:
+  ```json
+  {
+    "id": "string",
+    "name": "string",
+    "command": "string",
+    "status": "string",
+    "created_at": "timestamp"
+  }
+  ```
 
-### Code Conventions
+##### Get Task Logs
+- **Method**: GET
+- **Path**: `/api/v1/tasks/:taskID/logs`
+- **Response**:
+  ```json
+  {
+    "logs": "string"
+  }
+  ```
 
-- Do not use fmt.Println to print the logs, use the logger instead. If you want to debug something, use the logger.Debug() so we can disable it when we want to using the DEBUG=false.
-  
-- Handlers should be responsible for validating the request and response.
-- Handlers should only orchestrate the data flow between the services/modules and should not contain any business logic.
-- Use the predefined dto BaseResponse function to return data to the client.
-- Write swagger documentation for all the handlers.
+##### Cancel Task
+- **Method**: DELETE
+- **Path**: `/api/v1/tasks/:taskID/cancel`
+- **Response**:
+  ```json
+  {
+    "message": "Task cancelled successfully"
+  }
+  ```
+
+#### Server-Sent Events (SSE)
+
+##### Subscribe to Events
+- **Method**: GET
+- **Path**: `/api/v1/events`
+- **Description**: Establishes an SSE connection for real-time updates
+- **Response**: Event stream with task updates

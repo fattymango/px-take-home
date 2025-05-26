@@ -189,6 +189,62 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/tasks/{taskID}/cancel": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cancel task",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task"
+                ],
+                "summary": "Cancel task",
+                "operationId": "CancelTask",
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BaseResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tasks/{taskID}/logs": {
             "get": {
                 "security": [
@@ -325,6 +381,9 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "total_lines": {
+                    "type": "integer"
                 }
             }
         },
@@ -342,7 +401,7 @@ const docTemplate = `{
                 "TaskStatus_Running",
                 "TaskStatus_Completed",
                 "TaskStatus_Failed",
-                "TaskStatus_Canceled"
+                "TaskStatus_Cancelled"
             ]
         }
     },
