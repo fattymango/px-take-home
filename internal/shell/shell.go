@@ -7,13 +7,14 @@ import (
 	"io"
 	"os/exec"
 	"sync"
+	"syscall"
 )
 
 type ShellExecutor struct {
 	command string
 	cmd     *exec.Cmd
-	stdout  chan string
-	stderr  chan string
+	stdout  chan []byte
+	stderr  chan []byte
 
 	stdoutPipe io.ReadCloser
 	stderrPipe io.ReadCloser
@@ -35,10 +36,13 @@ func NewShellExecutor(command string) *ShellExecutor {
 }
 
 func (s *ShellExecutor) Execute() error {
-	s.stdout = make(chan string)
-	s.stderr = make(chan string)
+	s.stdout = make(chan []byte)
+	s.stderr = make(chan []byte)
 
 	s.cmd = exec.CommandContext(s.ctx, "bash", "-c", s.command)
+	s.cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true, // create a new process group, prevent the command from receiving the SIGINT signal
+	}
 
 	stdoutPipe, err := s.cmd.StdoutPipe()
 	if err != nil {
@@ -56,20 +60,20 @@ func (s *ShellExecutor) Execute() error {
 	}
 
 	s.wg.Add(2)
-	go s.readPipe(s.stderrPipe, s.stderr, "stderr")
-	go s.readPipe(s.stdoutPipe, s.stdout, "stdout")
+	go s.readPipe(s.stderrPipe, s.stderr)
+	go s.readPipe(s.stdoutPipe, s.stdout)
 
 	return nil
 }
 
-func (s *ShellExecutor) StdOutPipe() (<-chan string, error) {
+func (s *ShellExecutor) StdOutPipe() (<-chan []byte, error) {
 	if s.stdoutPipe == nil {
 		return nil, fmt.Errorf("stdout pipe not created")
 	}
 	return s.stdout, nil
 }
 
-func (s *ShellExecutor) StdErrPipe() (<-chan string, error) {
+func (s *ShellExecutor) StdErrPipe() (<-chan []byte, error) {
 	if s.stderrPipe == nil {
 		return nil, fmt.Errorf("stderr pipe not created")
 	}
@@ -77,12 +81,9 @@ func (s *ShellExecutor) StdErrPipe() (<-chan string, error) {
 }
 
 func (s *ShellExecutor) Cancel() error {
-	fmt.Printf("cancelled command\n")
-	s.cancel() // calling cancel will kill the command since we are passing the context to the command
-	fmt.Printf("waited for stream listeners to finish\n")
-	// s.wg.Wait()
-	fmt.Printf("command finished\n")
-	s.cmd.Wait()
+	s.cancel()   // calling cancel will kill the command since we are passing the context to the command
+	s.wg.Wait()  // wait for streams to finish
+	s.cmd.Wait() // wait for command to finish
 	return nil
 }
 
@@ -96,15 +97,12 @@ func (s *ShellExecutor) GetExitCode() (int, error) {
 	return exitCode, nil
 }
 
-func (s *ShellExecutor) readPipe(pipe io.ReadCloser, ch chan<- string, name string) {
-
-	defer fmt.Printf("pipe %s done\n", name)
+func (s *ShellExecutor) readPipe(pipe io.ReadCloser, ch chan<- []byte) {
 	defer s.wg.Done()
 	defer close(ch)
-	defer fmt.Printf("closing %s pipe\n", name)
 
 	scanner := bufio.NewScanner(pipe)
 	for scanner.Scan() {
-		ch <- scanner.Text()
+		ch <- scanner.Bytes()
 	}
 }

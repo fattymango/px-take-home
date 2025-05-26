@@ -30,6 +30,7 @@ func (j *Job) Cancel() {
 	j.cancel()
 }
 func (j *Job) Done() {
+	fmt.Printf("job #%d done\n", j.task.ID)
 	j.wg.Done()
 	close(j.done)
 }

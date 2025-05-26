@@ -61,6 +61,15 @@ func Start() {
 		}
 	}()
 
+	// go func() {
+	// 	time.Sleep(10 * time.Second)
+	// 	err = s.Stop()
+	// 	if err != nil {
+	// 		log.Fatalf("failed to stop server: %s", err)
+	// 	}
+	// 	log.Info("Server stopped")
+	// 	os.Exit(0)
+	// }()
 	// when painc receover
 	if err := recover(); err != nil {
 		log.Fatalf("some panic ...:", err)
@@ -68,13 +77,16 @@ func Start() {
 
 	// we need nice way to exit will use os package notify
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-
+	signal.Notify(quit,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
 	select {
 	case v := <-quit:
 		log.Infof("signal.Notify CTRL+C: %v", v)
-	case done := <-ctx.Done():
-		log.Infof("ctx.Done: %v", done)
+	case <-ctx.Done():
+		log.Infof("ctx.Done received")
 	}
 
 	log.Info("Stopping server...")

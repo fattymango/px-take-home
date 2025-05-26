@@ -21,6 +21,8 @@ type TaskLogger struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	ch chan []byte
 }
 
 func NewTaskLogger(config *config.Config, logger *logger.Logger, taskID uint64) *TaskLogger {
@@ -32,6 +34,7 @@ func NewTaskLogger(config *config.Config, logger *logger.Logger, taskID uint64) 
 		wg:     sync.WaitGroup{},
 		ctx:    ctx,
 		cancel: cancel,
+		ch:     make(chan []byte),
 	}
 }
 
@@ -52,7 +55,11 @@ func (t *TaskLogger) CreateLogFile() error {
 	return nil
 }
 
-func (t *TaskLogger) Write(p []byte) (n int, err error) {
+func (t *TaskLogger) Write(line []byte) {
+	t.ch <- line
+}
+
+func (t *TaskLogger) write(p []byte) (n int, err error) {
 	return t.logFile.Write(p)
 }
 
@@ -62,22 +69,18 @@ func (t *TaskLogger) Close() error {
 	return t.logFile.Close()
 }
 
-func (t *TaskLogger) ListenToStream(stdout, stderr <-chan string) {
+func (t *TaskLogger) Listen() {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
 		for {
 			select {
-			case line, ok := <-stdout:
+			case line, ok := <-t.ch:
 				if !ok {
-					continue
+					t.logger.Infof("task logger channel closed")
+					return
 				}
-				t.Write([]byte(line))
-			case line, ok := <-stderr:
-				if !ok {
-					continue
-				}
-				t.Write([]byte(line))
+				t.write(line)
 			case <-t.ctx.Done():
 				t.logger.Infof("task logger context done")
 				return
