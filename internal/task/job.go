@@ -13,7 +13,6 @@ type Job struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     *sync.WaitGroup
-	done   chan struct{}
 }
 
 func NewJob(wg *sync.WaitGroup, task *model.Task) *Job {
@@ -23,21 +22,13 @@ func NewJob(wg *sync.WaitGroup, task *model.Task) *Job {
 		ctx:    ctx,
 		cancel: cancel,
 		wg:     wg,
-		done:   make(chan struct{}),
 	}
 }
 func (j *Job) Cancel() {
 	j.cancel()
 }
 func (j *Job) Done() {
-	fmt.Printf("job #%d done\n", j.task.ID)
 	j.wg.Done()
-	close(j.done)
-}
-
-func (j *Job) Wait() {
-	<-j.done
-	fmt.Printf("job #%d finished\n", j.task.ID)
 }
 
 type JobCache interface {
@@ -67,7 +58,6 @@ func (c *InMemoryJobCache) GetJob(id uint64) (*Job, error) {
 }
 
 func (c *InMemoryJobCache) SetJob(id uint64, job *Job) {
-	fmt.Printf("setting job #%d\n", id)
 	c.cache.Store(id, job)
 }
 

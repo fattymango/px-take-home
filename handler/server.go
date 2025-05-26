@@ -75,7 +75,7 @@ type Services struct {
 }
 
 func newServices(cfg *config.Config, logger *logger.Logger, db *db.DB) *Services {
-	taskManager := task.NewTaskManager(cfg, logger, db)
+	taskManager := task.NewTaskManager(cfg, logger, task.NewTaskDB(cfg, logger, db))
 	taskManager.Start()
 	return &Services{
 		TaskManager: taskManager,
