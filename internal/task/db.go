@@ -9,7 +9,7 @@ import (
 
 type TaskRepository interface {
 	CreateTask(task *model.Task) error
-	GetAllTasks() ([]*model.Task, error)
+	GetAllTasks(offset, limit int) ([]*model.Task, int64, error)
 	GetTask(id uint64) (*model.Task, error)
 	UpdateTask(task *model.Task) error
 	UpdateTaskStatus(id uint64, status model.TaskStatus) error
@@ -33,12 +33,13 @@ func (t *TaskDB) CreateTask(task *model.Task) error {
 	return t.db.Create(task).Error
 }
 
-func (t *TaskDB) GetAllTasks() ([]*model.Task, error) {
+func (t *TaskDB) GetAllTasks(offset, limit int) ([]*model.Task, int64, error) {
 	var tasks []*model.Task
-	if err := t.db.Find(&tasks).Error; err != nil {
-		return nil, err
+	var total int64
+	if err := t.db.Order("created_at DESC").Offset(offset).Limit(limit).Find(&tasks).Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
-	return tasks, nil
+	return tasks, total, nil
 }
 
 func (t *TaskDB) GetTask(id uint64) (*model.Task, error) {
