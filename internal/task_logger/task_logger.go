@@ -1,14 +1,22 @@
 package tasklogger
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/pkg/logger"
+)
+
+const (
+	FLUSH_INTERVAL = 100 * time.Millisecond // Flush interval, every 100ms
+	MAX_BUF_SIZE   = 4096                   // Max buffer capacity, if this is exceeded, the buffer will be flushed
+	CH_BUF_SIZE    = 1000                   // Channel buffer size, this is the size of the channel buffer
 )
 
 type TaskLogger struct {
@@ -17,6 +25,7 @@ type TaskLogger struct {
 
 	taskID  uint64
 	logFile *os.File
+	buffer  *bufio.Writer
 	wg      sync.WaitGroup
 
 	ctx    context.Context
@@ -34,7 +43,7 @@ func NewTaskLogger(config *config.Config, logger *logger.Logger, taskID uint64) 
 		wg:     sync.WaitGroup{},
 		ctx:    ctx,
 		cancel: cancel,
-		ch:     make(chan []byte),
+		ch:     make(chan []byte, CH_BUF_SIZE),
 	}
 }
 
@@ -51,6 +60,7 @@ func (t *TaskLogger) CreateLogFile() error {
 	}
 
 	t.logFile = logFile
+	t.buffer = bufio.NewWriterSize(logFile, MAX_BUF_SIZE)
 
 	return nil
 }
@@ -60,19 +70,31 @@ func (t *TaskLogger) Write(line []byte) {
 }
 
 func (t *TaskLogger) write(p []byte) (n int, err error) {
-	return t.logFile.Write(p)
+	return t.buffer.Write(p)
 }
 
 func (t *TaskLogger) Close() error {
 	t.cancel()
 	t.wg.Wait()
+	t.Flush()
 	return t.logFile.Close()
 }
-
+func (t *TaskLogger) Flush() error {
+	if t.buffer == nil {
+		return nil
+	}
+	return t.buffer.Flush()
+}
 func (t *TaskLogger) Listen() {
 	t.wg.Add(1)
+	ticker := time.NewTicker(FLUSH_INTERVAL)
+
+	t.logger.Infof("starting task logger listener with ticker interval of 100ms")
+
 	go func() {
 		defer t.wg.Done()
+		defer ticker.Stop()
+		defer t.Flush()
 		for {
 			select {
 			case line, ok := <-t.ch:
@@ -81,10 +103,16 @@ func (t *TaskLogger) Listen() {
 					return
 				}
 				t.write(line)
+			case <-ticker.C:
+				// t.logger.Debugf("flushing buffer on ticker")
+				if err := t.buffer.Flush(); err != nil {
+					t.logger.Errorf("failed to flush buffer on ticker: %v", err)
+				}
 			case <-t.ctx.Done():
 				t.logger.Infof("task logger context done")
 				return
 			}
 		}
 	}()
+	t.logger.Infof("task logger listener started")
 }
