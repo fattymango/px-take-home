@@ -78,11 +78,11 @@ migrate:
 #################### Profiling ####################
 .PHONY: pprof-cpu
 pprof-cpu:
-	@go tool pprof -http=":8000" pprofbin ./pprof/cpu/*.pprof 
+	@go tool pprof -http=":8000" pprofbin ./profile/cpu/*.pprof 
 
 .PHONY: pprof-mem
 pprof-mem:
-	@go tool pprof -http=":8000" pprofbin ./pprof/mem/*.pprof 
+	@go tool pprof -http=":8000" pprofbin ./profile/mem/*.pprof 
 
 
 #################### Build Executable ####################

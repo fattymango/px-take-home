@@ -4,3 +4,4 @@ logs/
 .env.debug
 db/px.db
 task_logs/
+profile/

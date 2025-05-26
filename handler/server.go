@@ -42,7 +42,7 @@ func NewServer(cfg *config.Config, logger *logger.Logger, db *db.DB) (*Server, e
 		validator:   v,
 		middlewares: middlewares,
 		Services:    services,
-		sseManager:  sse.NewSseManager(cfg, logger, services.TaskManager.TaskStream(), services.TaskManager.LogStream()),
+		sseManager:  sse.NewSseManager(cfg, logger, services.TaskManager.TaskUpdatesStream(), services.TaskManager.LogStream()),
 	}, nil
 }
 
