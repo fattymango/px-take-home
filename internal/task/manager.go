@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/fattymango/px-take-home/config"
-	"github.com/fattymango/px-take-home/internal/logreader"
+	logreader "github.com/fattymango/px-take-home/internal/log_reader"
 	"github.com/fattymango/px-take-home/model"
 	"github.com/fattymango/px-take-home/pkg/logger"
 )

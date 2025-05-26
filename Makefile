@@ -67,7 +67,7 @@ seed:
 # Race Detector
 .PHONY: race
 race:
-	@CGO_ENABLED=1 go run -race cmd/main.go
+	@CGO_ENABLED=1 go run -race cmd/api/main.go
 
 
 .PHONY: migrate
