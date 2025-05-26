@@ -94,7 +94,7 @@ nextPageBtn.addEventListener('click', () => {
 });
 pageSizeSelect.addEventListener('change', (e) => {
     paginationState.pageSize = parseInt(e.target.value);
-    paginationState.currentPage = 1; // Reset to first page when changing page size
+    paginationState.currentPage = 1;  // Reset to first page when changing page size
     fetchTasks();
 });
 
@@ -164,8 +164,13 @@ async function handleCreateTask(e) {
 
 async function fetchTasks() {
     try {
-        const offset = (paginationState.currentPage - 1) * paginationState.pageSize;
-        const response = await fetch(`${API_BASE_URL}/tasks?offset=${offset}&limit=${paginationState.pageSize}`);
+        // For page 1: offset should be 0
+        // For page 2: offset should be pageSize
+        // For page 3: offset should be pageSize * 2
+        // etc.
+        const offset = Math.max(0, (paginationState.currentPage - 1));
+        const limit = paginationState.pageSize;
+        const response = await fetch(`${API_BASE_URL}/tasks?offset=${offset}&limit=${limit}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
