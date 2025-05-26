@@ -7,22 +7,6 @@ swagger:
 	@swag init  --parseDependency -g ./cmd/api/main.go -o ./api/swagger 
 
 
-#################### GRPC ####################
-.PHONY: init
-init:
-	@sudo apt install protobuf-compiler
-	@go get -u google.golang.org/protobuf@v1.26.0 
-	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest	
-	@go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
-	
-
-
-# Generate the proto files
-.PHONY: proto
-proto:
-	@protoc --go_out=./proto/ --go-grpc_out=./proto/ proto/*.proto
-
-
 
 #################### Testing ####################
 .PHONY: test
@@ -55,13 +39,9 @@ fmt , format:
 # Run the API server
 .PHONY: run
 run:
-	@ $(MAKE) build-quick
-	@ $(shell source exports.sh)
+	@ $(MAKE) build
 	@ ./bin/server
 
-.PHONY: seed
-seed:
-	@ go run cmd/seed/main.go
 
 
 # Race Detector
@@ -87,60 +67,14 @@ pprof-mem:
 
 #################### Build Executable ####################
 # Build amd64	for alpine
-.PHONY: build
-build:
+.PHONY: build-alpine
+build-alpine:
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags '-w -s' -o ./bin/server cmd/api/*.go
 
 # Build depending on the OS
-.PHONY: build-quick
-build-quick:
+.PHONY: build
+build:
 	@go build  -o ./bin/server cmd/api/*.go
-
-
-.PHONY: build-migrate
-build-migrate:
-	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags '-w -s' -o ./bin/migrate cmd/migrate/*.go
-
-.PHONY: build-migrate-quick
-	@go build  -o ./bin/migrate cmd/migrate/*.go
-
-
-
-
-#################### Docker Compose ####################
-
-# Stack
-.PHONY: up
-up:
-	@docker compose up -d --build --force-recreate --remove-orphans
-
-.PHONY: down
-down:
-	@docker compose down 
-
-.PHONY: top
-top:
-	@docker stats
-	
-.PHONY: down-volumes
-down-volumes:
-	@docker compose down -v
-
-
-
-.PHONY: push-dev
-push-dev:
-	@docker login registry.gitlab.com
-	@ $(MAKE) swagger
-	@ $(MAKE) build
-	@docker build -t registry.gitlab.com/:dev .
-	@docker push registry.gitlab.com/:dev
-
-#################### Logs ####################
-
-.PHONY: logs-server
-logs-server:
-	@docker logs server -f
 
 
 #################### SQLITE ####################
@@ -158,8 +92,7 @@ sqlite-create-db:
 .PHONY: fresh-start
 fresh-start:
 	@$(MAKE) sqlite-flush-db
-	@$(MAKE) sqlite-create-db
-	@$(MAKE) clean
+	@$(MAKE) clean-logs
 	@$(MAKE) run
 
 .PHONY: install-deps
@@ -167,6 +100,7 @@ install-deps:
 	@go mod tidy
 	@sudo apt  install shellcheck
 
-.PHONY: clean
-clean:
+.PHONY: clean-logs
+clean-logs:
 	@rm -rf task_logs
+

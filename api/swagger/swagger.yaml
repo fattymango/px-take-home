@@ -40,6 +40,8 @@ definitions:
         items:
           type: string
         type: array
+      total_lines:
+        type: integer
     type: object
   model.TaskStatus:
     enum:
@@ -54,7 +56,7 @@ definitions:
     - TaskStatus_Running
     - TaskStatus_Completed
     - TaskStatus_Failed
-    - TaskStatus_Canceled
+    - TaskStatus_Cancelled
 host: localhost:8888
 info:
   contact:
@@ -170,6 +172,41 @@ paths:
       - BearerAuth: []
       - BearerAuth: []
       summary: Get task by ID
+      tags:
+      - Task
+  /api/v1/tasks/{taskID}/cancel:
+    delete:
+      consumes:
+      - application/json
+      description: Cancel task
+      operationId: CancelTask
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.BaseResponse'
+      security:
+      - BearerAuth: []
+      - BearerAuth: []
+      summary: Cancel task
       tags:
       - Task
   /api/v1/tasks/{taskID}/logs:

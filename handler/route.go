@@ -3,6 +3,8 @@ package server
 import (
 	// _ "github.com/fattymango/px-take-home/api/swagger"
 
+	"os"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 
@@ -20,21 +22,15 @@ func (s *Server) RegisterRoutes() {
 	// Loging Middleware
 	root.Use(s.middlewares.Logger)
 	// root.Use(s.middlewares.RateLimiter)
+
 	// Swagger UI
-	root.Use(swagger.New(swagger.Config{
-		FilePath: s.config.Swagger.FilePath,
-		Path:     "/api/v1/docs",
-		CacheAge: 1,
-	}))
+	s.RegisterSwagger(root)
 
 	// Serve static web client files
 	root.Static("/", "./web")
 
 	api := root.Group("/api")
 	v1 := api.Group("/v1")
-
-	// Health
-	s.RegisterHealthAPIs(v1)
 
 	// Task
 	s.RegisterTaskAPIs(v1)
@@ -44,12 +40,19 @@ func (s *Server) RegisterRoutes() {
 
 }
 
-func (s *Server) RegisterHealthAPIs(router fiber.Router) {
-	health := router.Group("/health")
+func (s *Server) RegisterSwagger(router fiber.Router) {
+	swaggerPath := s.config.Swagger.FilePath
+	// Check if the file exists
+	if _, err := os.Stat(swaggerPath); os.IsNotExist(err) {
+		s.logger.Error("Swagger file not found, swagger will not be available")
+		return
+	}
 
-	health.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("OK")
-	})
+	router.Use(swagger.New(swagger.Config{
+		FilePath: s.config.Swagger.FilePath,
+		Path:     "/api/v1/docs",
+		CacheAge: 1,
+	}))
 }
 
 func (s *Server) RegisterTaskAPIs(router fiber.Router) {
