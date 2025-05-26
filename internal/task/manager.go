@@ -7,7 +7,6 @@ import (
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/internal/logreader"
 	"github.com/fattymango/px-take-home/model"
-	"github.com/fattymango/px-take-home/pkg/db"
 	"github.com/fattymango/px-take-home/pkg/logger"
 )
 
@@ -69,11 +68,11 @@ type TaskManager struct {
 	taskUpdatesStream chan *TaskMsg
 }
 
-func NewTaskManager(config *config.Config, logger *logger.Logger, db *db.DB) *TaskManager {
+func NewTaskManager(config *config.Config, logger *logger.Logger, repo TaskRepository) *TaskManager {
 	return &TaskManager{
 		config:          config,
 		logger:          logger,
-		repo:            NewTaskDB(config, logger, db),
+		repo:            repo,
 		taskUpdatesChan: make(chan *JobMsg),
 		cache:           NewInMemoryJobCache(),
 
@@ -107,12 +106,9 @@ func (t *TaskManager) Stop() {
 		}
 	}()
 
-	for _, job := range runningJobs {
-		job.Wait()
-	}
-	t.logger.Debug("waiting for tasks to finish")
+	t.logger.Debug("waiting for jobs to finish")
 	t.jobsWg.Wait() // wait for all jobs to finish
-	t.logger.Debug("tasks finished")
+	t.logger.Debug("jobs finished")
 	close(t.taskUpdatesChan)
 	t.logger.Debug("waiting for task manager to finish")
 	t.wg.Wait() // wait for task manager to finish all
