@@ -15,20 +15,17 @@ type Job struct {
 	wg     *sync.WaitGroup
 }
 
-func NewJob(wg *sync.WaitGroup, task *model.Task) *Job {
+func NewJob(task *model.Task) *Job {
 	ctx, cancel := context.WithCancel(context.TODO())
 	return &Job{
 		task:   task,
 		ctx:    ctx,
 		cancel: cancel,
-		wg:     wg,
 	}
 }
+
 func (j *Job) Cancel() {
 	j.cancel()
-}
-func (j *Job) Done() {
-	j.wg.Done()
 }
 
 type JobCache interface {
@@ -48,8 +45,8 @@ func NewInMemoryJobCache() *InMemoryJobCache {
 	}
 }
 
-func (c *InMemoryJobCache) GetJob(id uint64) (*Job, error) {
-	job, ok := c.cache.Load(id)
+func (c *InMemoryJobCache) GetJob(taskID uint64) (*Job, error) {
+	job, ok := c.cache.Load(taskID)
 	if !ok {
 		return nil, fmt.Errorf("job not found")
 	}
@@ -57,12 +54,12 @@ func (c *InMemoryJobCache) GetJob(id uint64) (*Job, error) {
 	return job.(*Job), nil
 }
 
-func (c *InMemoryJobCache) SetJob(id uint64, job *Job) {
-	c.cache.Store(id, job)
+func (c *InMemoryJobCache) SetJob(taskID uint64, job *Job) {
+	c.cache.Store(taskID, job)
 }
 
-func (c *InMemoryJobCache) DeleteJob(id uint64) {
-	c.cache.Delete(id)
+func (c *InMemoryJobCache) DeleteJob(taskID uint64) {
+	c.cache.Delete(taskID)
 }
 
 func (c *InMemoryJobCache) GetAllJobs() ([]*Job, error) {

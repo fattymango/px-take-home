@@ -10,6 +10,10 @@ import (
 	"github.com/fattymango/px-take-home/pkg/logger"
 )
 
+const (
+	CH_BUF_SIZE = 1000
+)
+
 type operation uint8
 
 const (
@@ -53,6 +57,9 @@ type TaskManager struct {
 	repo   TaskRepository
 	cache  JobCache
 
+	// Queue channel for queued tasks
+	taskQueue      chan *model.Task
+	taskQueueMutex sync.RWMutex
 	// task logger constructor, can be replaced with different implementations
 	newTasklogReader func(*config.Config, *logger.Logger, uint64) logreader.LogReader
 
@@ -73,31 +80,38 @@ type TaskManager struct {
 
 func NewTaskManager(config *config.Config, logger *logger.Logger, repo TaskRepository) *TaskManager {
 	return &TaskManager{
-		config:          config,
-		logger:          logger,
-		repo:            repo,
-		taskUpdatesChan: make(chan *JobMsg),
-		cache:           NewInMemoryJobCache(),
+		config: config,
+		logger: logger,
+		repo:   repo,
+		cache:  NewInMemoryJobCache(),
 
-		wg:     sync.WaitGroup{},
-		jobsWg: sync.WaitGroup{},
+		taskQueue:      make(chan *model.Task, CH_BUF_SIZE),
+		taskQueueMutex: sync.RWMutex{},
+
+		taskUpdatesChan: make(chan *JobMsg, CH_BUF_SIZE),
+		wg:              sync.WaitGroup{},
+		jobsWg:          sync.WaitGroup{},
+
+		logStream:         make(chan *LogMsg, CH_BUF_SIZE),
+		taskUpdatesStream: make(chan *TaskMsg, CH_BUF_SIZE),
 
 		// newTasklogReader: tasklogger.NewTailHeadReader,
 		// newTasklogReader: tasklogger.NewSedReader,
 		// newTasklogReader: tasklogger.NewAwkReader,
 		newTasklogReader: logreader.NewBufferReader,
-
-		logStream:         make(chan *LogMsg),
-		taskUpdatesStream: make(chan *TaskMsg),
 	}
 }
 
 func (t *TaskManager) Start() {
 	t.wg.Add(1)
-	go t.processTasks()
+	go t.listen()
+	go t.loadQueuedTasks()
 }
 
 func (t *TaskManager) Stop() {
+	t.taskQueueMutex.Lock()
+	defer t.taskQueueMutex.Unlock()
+	close(t.taskQueue)
 	runningJobs, err := t.cache.GetAllJobs()
 	if err != nil {
 		t.logger.Errorf("failed to get all jobs: %s", err)
@@ -119,21 +133,26 @@ func (t *TaskManager) Stop() {
 	close(t.taskUpdatesStream)
 }
 
-// TODO: This is a blocking operation, we should use a non-blocking operation
-// But we need to make sure that the operations on DB are FIFO so we don't result in data inconsistency
-func (t *TaskManager) processTasks() {
+func (t *TaskManager) listen() {
 	defer t.wg.Done()
 	defer t.logger.Debug("task manager stopped")
 	// Drain any remaining tasks after channel is closed
-	for {
+	for t.taskUpdatesChan != nil || t.taskQueue != nil {
 		select {
 		case data, ok := <-t.taskUpdatesChan:
 			if !ok {
 				t.logger.Debug("channel is now empty and closed")
-				return // Channel is now empty and closed
+				t.taskUpdatesChan = nil
+				continue
 			}
 			t.processTask(data)
-
+		case task, ok := <-t.taskQueue:
+			if !ok {
+				t.logger.Debug("job queue is now empty and closed")
+				t.taskQueue = nil
+				continue
+			}
+			go t.executeTask(task)
 		}
 	}
 
@@ -143,6 +162,7 @@ func (t *TaskManager) processTasks() {
 func (t *TaskManager) processTask(data *JobMsg) {
 	switch data.op {
 	case op_TASK_CANCELLED:
+		t.logger.Infof("processing task cancelled, taskID: %d, reason: %s, exitCode: %d", data.taskID, data.reason, data.exitCode)
 		err := t.TaskCancelled(data.taskID, data.exitCode)
 		if err != nil {
 			t.logger.Errorf("failed to cancel task: %s", err)
@@ -167,6 +187,41 @@ func (t *TaskManager) processTask(data *JobMsg) {
 	}
 }
 
+func (t *TaskManager) loadQueuedTasks() error {
+	t.logger.Debug("loading queued tasks")
+	const batchSize = 100
+	offset := 0
+
+	for {
+		tasks, total, err := t.repo.GetAllTasks(offset, batchSize, model.TaskStatus_Queued)
+		if err != nil {
+			t.logger.Errorf("failed to get queued tasks: %s", err)
+			return err
+		}
+
+		if len(tasks) == 0 {
+			break
+		}
+
+		t.logger.Infof("found %d queued tasks", len(tasks))
+
+		for _, task := range tasks {
+			err := t.QueueTask(task)
+			if err != nil {
+				t.logger.Errorf("failed to queue task: %s", err)
+			}
+		}
+
+		offset += 1
+
+		t.logger.Infof("Loaded %d / %d queued tasks", offset, total)
+
+	}
+
+	t.logger.Debug("all queued tasks loaded")
+	return nil
+}
+
 func (t *TaskManager) LogStream() <-chan *LogMsg {
 	return t.logStream
 }
@@ -184,6 +239,27 @@ func (t *TaskManager) CreateTask(task *model.Task) (*model.Task, error) {
 	return task, nil
 }
 
+func (t *TaskManager) QueueTask(task *model.Task) error {
+	t.taskQueueMutex.RLock()
+	defer t.taskQueueMutex.RUnlock()
+
+	if task == nil {
+		return fmt.Errorf("task is nil")
+	}
+
+	if t.taskQueue == nil {
+		return fmt.Errorf("task queue is nil")
+	}
+
+	_, err := t.cache.GetJob(task.ID)
+	if err == nil {
+		return fmt.Errorf("task #%d is already in the queue", task.ID)
+	}
+
+	t.taskQueue <- task
+	return nil
+}
+
 func (t *TaskManager) GetTask(id uint64) (*model.Task, error) {
 	task, err := t.repo.GetTask(id)
 	if err != nil {
@@ -193,8 +269,8 @@ func (t *TaskManager) GetTask(id uint64) (*model.Task, error) {
 	return task, nil
 }
 
-func (t *TaskManager) GetAllTasks(offset, limit int) ([]*model.Task, int64, error) {
-	tasks, total, err := t.repo.GetAllTasks(offset, limit)
+func (t *TaskManager) GetAllTasks(offset, limit int, status model.TaskStatus) ([]*model.Task, int64, error) {
+	tasks, total, err := t.repo.GetAllTasks(offset, limit, status)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get all tasks from db: %w", err)
 	}
@@ -212,18 +288,17 @@ func (t *TaskManager) CancelTask(taskID uint64, reason string, exitCode int) err
 	return nil
 }
 
-func (t *TaskManager) ExecuteTask(task *model.Task) error {
-	job := NewJob(&t.jobsWg, task)
-	t.cache.SetJob(task.ID, job)
+func (t *TaskManager) executeTask(task *model.Task) error {
 	t.jobsWg.Add(1)
+	defer t.jobsWg.Done()
+	job := NewJob(task)
+	t.cache.SetJob(task.ID, job)
 
-	go func() {
-		executor := NewJobExecutor(t.config, t.logger, job, t.taskUpdatesChan, t.logStream)
-		err := executor.Execute()
-		if err != nil {
-			t.logger.Errorf("failed to execute job #%d: %s", job.task.ID, err)
-		}
-	}()
+	executor := NewJobExecutor(t.config, t.logger, job, t.taskUpdatesChan, t.logStream)
+	err := executor.Execute()
+	if err != nil {
+		t.logger.Errorf("failed to execute job #%d: %s", job.task.ID, err)
+	}
 
 	return nil
 }

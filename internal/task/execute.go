@@ -136,7 +136,6 @@ func (t *JobExecutor) close() {
 	t.logger.Infof("closing task executor")
 	t.taskLogger.Close()
 	t.logger.Infof("task executor closed")
-	t.job.Done()
 }
 
 func (t *JobExecutor) sendTaskFailed(reason string, exitCode int) {
@@ -158,8 +157,10 @@ func (t *JobExecutor) sendTaskRunning() {
 }
 
 func (t *JobExecutor) sendTaskCancelled(exitCode int) {
+	t.logger.Infof("sending task cancelled")
 	t.job.task.Status = model.TaskStatus_Cancelled
 	t.taskChan <- &JobMsg{op: op_TASK_CANCELLED, taskID: t.job.task.ID, reason: ReasonCancelledBySystem, exitCode: exitCode}
+	t.logger.Infof("task cancelled")
 }
 
 func (t *JobExecutor) writeStdoutLog(line []byte) {

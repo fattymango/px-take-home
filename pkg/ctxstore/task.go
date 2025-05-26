@@ -3,6 +3,7 @@ package ctxstore
 import (
 	"fmt"
 
+	"github.com/fattymango/px-take-home/model"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -15,7 +16,7 @@ func GetTaskIDFromCtx(ctx *fiber.Ctx) (uint64, error) {
 	return uint64(taskID), nil
 }
 
-func GetOffsetLimitFromCtx(ctx *fiber.Ctx) (int, int) {
+func GetOffsetLimitQueryFromCtx(ctx *fiber.Ctx) (int, int) {
 	offset := ctx.QueryInt("offset", 0)
 	limit := ctx.QueryInt("limit", 10)
 
@@ -24,4 +25,18 @@ func GetOffsetLimitFromCtx(ctx *fiber.Ctx) (int, int) {
 	}
 
 	return offset, limit
+}
+
+func GetStatusQueryFromCtx(ctx *fiber.Ctx) (model.TaskStatus, error) {
+	status := ctx.QueryInt("status", 0)
+
+	if status == 0 {
+		return 0, nil
+	}
+
+	if _, ok := model.TaskStatus_name[model.TaskStatus(status)]; !ok {
+		return 0, fmt.Errorf("invalid status")
+	}
+
+	return model.TaskStatus(status), nil
 }

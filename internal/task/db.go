@@ -9,7 +9,7 @@ import (
 
 type TaskRepository interface {
 	CreateTask(task *model.Task) error
-	GetAllTasks(offset, limit int) ([]*model.Task, int64, error)
+	GetAllTasks(offset, limit int, status model.TaskStatus) ([]*model.Task, int64, error)
 	GetTask(id uint64) (*model.Task, error)
 	UpdateTask(task *model.Task) error
 	UpdateTaskStatus(id uint64, status model.TaskStatus) error
@@ -33,12 +33,31 @@ func (t *TaskDB) CreateTask(task *model.Task) error {
 	return t.db.Create(task).Error
 }
 
-func (t *TaskDB) GetAllTasks(offset, limit int) ([]*model.Task, int64, error) {
+func (t *TaskDB) GetAllTasks(offset, limit int, status model.TaskStatus) ([]*model.Task, int64, error) {
 	var tasks []*model.Task
 	var total int64
-	if err := t.db.Order("created_at DESC").Offset(offset).Limit(limit).Find(&tasks).Count(&total).Error; err != nil {
+
+	if status != 0 {
+		if err := t.db.Debug().Model(&model.Task{}).Where("status = ?", status).Count(&total).Error; err != nil {
+			return nil, 0, err
+		}
+	} else {
+		if err := t.db.Debug().Model(&model.Task{}).Count(&total).Error; err != nil {
+			return nil, 0, err
+		}
+	}
+
+	// Fetch paginated tasks
+	query := t.db.Debug().Order("created_at DESC").Offset(offset).Limit(limit)
+
+	if _, ok := model.TaskStatus_name[status]; ok {
+		query = query.Where("status = ?", status)
+	}
+
+	if err := query.Find(&tasks).Error; err != nil {
 		return nil, 0, err
 	}
+
 	return tasks, total, nil
 }
 

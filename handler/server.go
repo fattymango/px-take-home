@@ -62,7 +62,9 @@ func (s *Server) Stop() error {
 	s.logger.Info("Stopping server...")
 	s.TaskManager.Stop()
 	s.sseManager.Stop()
-	return s.App.Shutdown()
+	err := s.App.Shutdown()
+
+	return err
 }
 
 type Middlewares struct {

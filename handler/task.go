@@ -37,12 +37,12 @@ func (s *Server) CreateTask(c *fiber.Ctx) error {
 
 	task, err := s.TaskManager.CreateTask(crt.ToTask())
 	if err != nil {
-		return dto.NewInternalServerErrorResponse(c, err.Error())
+		return dto.NewInternalServerErrorResponse(c, fmt.Sprintf("failed to create task: %s", err))
 	}
 
-	err = s.TaskManager.ExecuteTask(task)
+	err = s.TaskManager.QueueTask(task)
 	if err != nil {
-		return dto.NewInternalServerErrorResponse(c, fmt.Sprintf("failed to execute task: %s", err))
+		return dto.NewInternalServerErrorResponse(c, fmt.Sprintf("failed to queue task: %s", err))
 	}
 
 	return dto.NewSuccessResponse(c, dto.ToViewTask(task))
@@ -65,9 +65,13 @@ func (s *Server) CreateTask(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @ID GetAllTasks
 func (s *Server) GetAllTasks(c *fiber.Ctx) error {
-	offset, limit := ctxstore.GetOffsetLimitFromCtx(c)
+	offset, limit := ctxstore.GetOffsetLimitQueryFromCtx(c)
+	status, err := ctxstore.GetStatusQueryFromCtx(c)
+	if err != nil {
+		return dto.NewBadRequestResponse(c, err.Error())
+	}
 
-	tasks, total, err := s.TaskManager.GetAllTasks(offset, limit)
+	tasks, total, err := s.TaskManager.GetAllTasks(offset, limit, status)
 	if err != nil {
 		return dto.NewInternalServerErrorResponse(c, err.Error())
 	}
