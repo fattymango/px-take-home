@@ -261,4 +261,43 @@ button:hover {
     0% { opacity: 0.6; }
     50% { opacity: 1; }
     100% { opacity: 0.6; }
+}
+
+/* Log line styles */
+.log-line {
+    display: flex;
+    align-items: flex-start;
+    padding: 2px 0;
+    font-family: monospace;
+    line-height: 1.4;
+}
+
+.line-number {
+    min-width: 50px;
+    color: #666;
+    text-align: right;
+    padding-right: 10px;
+    user-select: none;
+    border-right: 1px solid #ddd;
+    margin-right: 10px;
+}
+
+.log-message {
+    flex: 1;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* Task status updates */
+.exit-code, .reason {
+    margin: 5px 0;
+    padding: 5px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+.reason {
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
 } 

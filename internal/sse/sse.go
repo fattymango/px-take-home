@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/internal/task"
@@ -19,7 +20,7 @@ const (
 
 type Msg struct {
 	Event  EventType   `json:"event"`
-	TaskID uint64      `json:"taskID"`
+	TaskID uint64      `json:"task_id"`
 	Value  interface{} `json:"value"`
 }
 
@@ -28,7 +29,7 @@ type SseManager struct {
 	logger     *logger.Logger
 	taskStream <-chan *task.TaskMsg
 	logStream  <-chan *task.LogMsg
-	clients    map[*Client]bool
+	clients    sync.Map
 }
 
 func NewSseManager(config *config.Config, logger *logger.Logger, taskStream <-chan *task.TaskMsg, logStream <-chan *task.LogMsg) *SseManager {
@@ -37,7 +38,7 @@ func NewSseManager(config *config.Config, logger *logger.Logger, taskStream <-ch
 		logger:     logger,
 		taskStream: taskStream,
 		logStream:  logStream,
-		clients:    make(map[*Client]bool),
+		clients:    sync.Map{},
 	}
 }
 
@@ -66,39 +67,49 @@ func (s *SseManager) Start() {
 }
 
 func (s *SseManager) Stop() {
-	for client := range s.clients {
-		s.logger.Info("Cancelling client", "client", client.ID)
-		client.Cancel()
-	}
+	s.clients.Range(func(key, value interface{}) bool {
+		s.logger.Info("Cancelling client", "client", value.(*Client).ID)
+		value.(*Client).Cancel()
+		return true
+	})
+}
+
+func (s *SseManager) NewSSEClient(buffer *bufio.Writer) *Client {
+	client := NewClient(buffer)
+	s.clients.Store(client.ID, client)
+	return client
+}
+
+func (s *SseManager) RemoveSSEClient(id string) {
+	s.clients.Delete(id)
 }
 
 func (s *SseManager) sendTaskStatus(msg *task.TaskMsg) {
 	sseMessage := s.formatSSEMessage(&Msg{
 		Event:  MsgTypeTaskStatus,
 		TaskID: msg.TaskID,
-		Value:  msg.Status,
+		Value:  msg,
 	})
 
-	for client := range s.clients {
+	s.clients.Range(func(key, value interface{}) bool {
+		client := value.(*Client)
 		client.Write(sseMessage)
-	}
+		return true
+	})
 }
 
 func (s *SseManager) sendLog(msg *task.LogMsg) {
 	sseMessage := s.formatSSEMessage(&Msg{
 		Event:  MsgTypeLog,
 		TaskID: msg.TaskID,
-		Value:  string(msg.Line),
+		Value:  msg,
 	})
 
-	for client := range s.clients {
+	s.clients.Range(func(key, value interface{}) bool {
+		client := value.(*Client)
 		client.Write(sseMessage)
-	}
-}
-func (s *SseManager) NewSSEClient(buffer *bufio.Writer) *Client {
-	client := NewClient(uint64(len(s.clients)+1), buffer)
-	s.clients[client] = true
-	return client
+		return true
+	})
 }
 
 func (s *SseManager) formatSSEMessage(msg *Msg) string {

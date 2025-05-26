@@ -2,6 +2,7 @@ package task
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/internal/shell"
@@ -24,7 +25,9 @@ type JobExecutor struct {
 	taskLogger *tasklogger.TaskLogger
 
 	taskChan  chan<- *JobMsg // channel to send task updates to the task manager
-	logStream chan<- *LogMsg // channel to send logs to the task logger
+	logStream chan<- *LogMsg // channel to send logs to the task manager
+
+	lineNumber atomic.Int64
 }
 
 func NewJobExecutor(config *config.Config, logger *logger.Logger, job *Job, taskChan chan<- *JobMsg, logStream chan<- *LogMsg) *JobExecutor {
@@ -35,6 +38,7 @@ func NewJobExecutor(config *config.Config, logger *logger.Logger, job *Job, task
 		taskChan:   taskChan,
 		logStream:  logStream,
 		taskLogger: tasklogger.NewTaskLogger(config, logger, job.task.ID),
+		lineNumber: atomic.Int64{},
 	}
 }
 
@@ -115,14 +119,6 @@ func (t *JobExecutor) Execute() error {
 
 	}
 
-	// time.Sleep(1 * time.Second)
-	// // check if the task was cancelled
-	// if t.job.ctx.Err() != nil {
-	// 	t.logger.Infof("task was cancelled")
-	// 	t.sendTaskCancelled(0)
-	// 	return nil
-	// }
-
 	exitCode, err := executor.GetExitCode()
 	if err != nil {
 		t.logger.Errorf("failed to get exit code: %s", err)
@@ -168,10 +164,10 @@ func (t *JobExecutor) sendTaskCancelled(exitCode int) {
 
 func (t *JobExecutor) writeStdoutLog(line []byte) {
 	t.taskLogger.Write(append(line, '\n'))
-	t.logStream <- &LogMsg{TaskID: t.job.task.ID, Line: line}
+	t.logStream <- &LogMsg{TaskID: t.job.task.ID, LineNumber: int(t.lineNumber.Add(1)), Line: string(line)}
 }
 
 func (t *JobExecutor) writeStderrLog(line []byte) {
 	t.taskLogger.Write(append(line, '\n'))
-	t.logStream <- &LogMsg{TaskID: t.job.task.ID, Line: line}
+	t.logStream <- &LogMsg{TaskID: t.job.task.ID, LineNumber: int(t.lineNumber.Add(1)), Line: string(line)}
 }

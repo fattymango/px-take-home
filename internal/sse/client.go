@@ -5,19 +5,21 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Client struct {
-	ID     uint64
+	ID     string
 	Buffer *bufio.Writer
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
-func NewClient(id uint64, buffer *bufio.Writer) *Client {
+func NewClient(buffer *bufio.Writer) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
-		ID:     id,
+		ID:     uuid.New().String(),
 		Buffer: buffer,
 		ctx:    ctx,
 		cancel: cancel,

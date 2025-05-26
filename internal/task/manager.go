@@ -35,13 +35,16 @@ type JobMsg struct {
 }
 
 type LogMsg struct {
-	TaskID uint64
-	Line   []byte
+	TaskID     uint64 `json:"task_id"`
+	LineNumber int    `json:"line_number"`
+	Line       string `json:"line"`
 }
 
 type TaskMsg struct {
-	TaskID uint64
-	Status model.TaskStatus
+	TaskID   uint64           `json:"task_id"`
+	Status   model.TaskStatus `json:"status"`
+	Reason   string           `json:"reason"`
+	ExitCode int              `json:"exit_code"`
 }
 
 type TaskManager struct {
@@ -227,19 +230,19 @@ func (t *TaskManager) ExecuteTask(task *model.Task) error {
 
 func (t *TaskManager) TaskFailed(taskID uint64, reason string, exitCode int) error {
 	t.cache.DeleteJob(taskID)
-	t.taskUpdatesStream <- &TaskMsg{TaskID: taskID, Status: model.TaskStatus_Failed}
+	t.taskUpdatesStream <- &TaskMsg{TaskID: taskID, Status: model.TaskStatus_Failed, Reason: reason, ExitCode: exitCode}
 	return t.repo.TaskFailed(taskID, reason, exitCode)
 }
 
 func (t *TaskManager) TaskCompleted(taskID uint64, exitCode int) error {
 	t.cache.DeleteJob(taskID)
-	t.taskUpdatesStream <- &TaskMsg{TaskID: taskID, Status: model.TaskStatus_Completed}
+	t.taskUpdatesStream <- &TaskMsg{TaskID: taskID, Status: model.TaskStatus_Completed, ExitCode: exitCode}
 	return t.repo.TaskCompleted(taskID, exitCode)
 }
 
 func (t *TaskManager) TaskCancelled(taskID uint64, exitCode int) error {
 	t.cache.DeleteJob(taskID)
-	t.taskUpdatesStream <- &TaskMsg{TaskID: taskID, Status: model.TaskStatus_Cancelled}
+	t.taskUpdatesStream <- &TaskMsg{TaskID: taskID, Status: model.TaskStatus_Cancelled, ExitCode: exitCode}
 	return t.repo.TaskCancelled(taskID, ReasonCancelledBySystem, exitCode)
 }
 
