@@ -81,11 +81,7 @@ Below the create task form, you can see all the tasks created and the status and
 
 Click on the `Cancel` button to cancel the task, the button only appears when the task is running.
 
-![alt](./docs/img/cancel_task.png)
-
-When the task is cancelled, the task will be shown in the main page with a `Cancelled` status.
-
-![alt](./docs/img/canceled_task.png)
+![alt](./docs/img/running_task.png)
 
 
 
@@ -93,11 +89,17 @@ When the task is cancelled, the task will be shown in the main page with a `Canc
 
 Click on `View Logs` button to view the logs of the task.
 
-![alt](./docs/img/view_logs_button.png)
 
 Then you can see the logs of the task, if the task is still running, you can see the logs in real time.
 
-![alt](./docs/img/view_task_logs.png)
+![alt](./docs/img/task_logs.png)
+
+##### Download Logs
+
+Click on the `Download Logs` button to download the logs of the task.
+
+
+
 
 
 ### Configuration
@@ -118,13 +120,86 @@ The server can be configured using environment variables.
 ### Trade Offs and Gotchas
 
 #### Read Log files
+When reading log files, the server will use different readers based on the file size and the range of the logs to read.
+```go
+	switch {
+	case from == 0 && to == 0: // Get last 100 lines
+		l.logger.Info("using tail head reader")
+		reader = NewTailHeadReader(l.config, l.logger, taskID) // Use tail to read last 100 lines
+
+	default:
+		if fileSize > MaxFileSize {
+			l.logger.Info("File size is greater than 1MB, using sed reader")
+			reader = NewSedReader(l.config, l.logger, taskID) // Use sed to read a specific range, when file is large
+		} else {
+			l.logger.Info("File size is less than 1MB, using buffer reader")
+			reader = NewBufferReader(l.config, l.logger, taskID) // Use buffer to read the whole file, when file is small
+		}
+	}
+```
+
+Benchmark results:
+```
+BenchmarkTailHeadReader/DefaultLastLines-8         	                        146	  7228285 ns/op	  197962 B/op	     200 allocs/op
+BenchmarkTailHeadReader/SpecificRange_SmallRange_10Percent-8         	      73	  15612954 ns/op	  197825 B/op	     203 allocs/op
+BenchmarkTailHeadReader/SpecificRange_MidRange_25Percent-8           	      64	  17748550 ns/op	  519238 B/op	     210 allocs/op
+BenchmarkTailHeadReader/SpecificRange_LargeRange_50Percent-8         	      42	  25451076 ns/op	  929176 B/op	     214 allocs/op
+BenchmarkTailHeadReader/SpecificRange_HugeRange_30to90Percent-8      	      14	  73096501 ns/op	192401233 B/op	     243 allocs/op
+BenchmarkTailHeadReader/SpecificRange_FullRange-8                    	       3	 402475912 ns/op	444649560 B/op	     254 allocs/op
+BenchmarkSedReader/DefaultLastLines-8                                	      81	  13428378 ns/op	  197705 B/op	     202 allocs/op
+BenchmarkSedReader/SpecificRange_SmallRange_10Percent-8              	      85	  12936926 ns/op	  197870 B/op	     203 allocs/op
+BenchmarkSedReader/SpecificRange_MidRange_25Percent-8                	      80	  12771140 ns/op	  519142 B/op	     208 allocs/op
+BenchmarkSedReader/SpecificRange_LargeRange_50Percent-8              	      82	  13073244 ns/op	  929002 B/op	     211 allocs/op
+BenchmarkSedReader/SpecificRange_HugeRange_30to90Percent-8           	      20	  55361485 ns/op	192400966 B/op	     239 allocs/op
+BenchmarkSedReader/SpecificRange_FullRange-8                         	       9	 114927408 ns/op	444649080 B/op	     247 allocs/op
+BenchmarkAwkReader/DefaultLastLines-8                                	      68	  16119591 ns/op	  193362 B/op	     196 allocs/op
+BenchmarkAwkReader/SpecificRange_SmallRange_10Percent-8              	     142	   8070630 ns/op	  193281 B/op	     196 allocs/op
+BenchmarkAwkReader/SpecificRange_MidRange_25Percent-8                	     124	   9352097 ns/op	  500311 B/op	     199 allocs/op
+BenchmarkAwkReader/SpecificRange_LargeRange_50Percent-8              	      99	  11157353 ns/op	  894036 B/op	     202 allocs/op
+BenchmarkAwkReader/SpecificRange_HugeRange_30to90Percent-8           	      24	  54710929 ns/op	178160818 B/op	     212 allocs/op
+BenchmarkAwkReader/SpecificRange_FullRange-8                         	       4	 256333644 ns/op	399935126 B/op	     218 allocs/op
+BenchmarkBufferReader/DefaultLastLines-8                             	      19	  62706467 ns/op	144005081 B/op	  505023 allocs/op
+BenchmarkBufferReader/SpecificRange_SmallRange_10Percent-8           	    2046	    694005 ns/op	   34906 B/op	     118 allocs/op
+BenchmarkBufferReader/SpecificRange_MidRange_25Percent-8             	     618	   1959110 ns/op	  151783 B/op	     520 allocs/op
+BenchmarkBufferReader/SpecificRange_LargeRange_50Percent-8           	     297	   4017274 ns/op	  296311 B/op	    1022 allocs/op
+BenchmarkBufferReader/SpecificRange_HugeRange_30to90Percent-8        	      87	  12875327 ns/op	56911861 B/op	  166708 allocs/op
+BenchmarkBufferReader/SpecificRange_FullRange-8                      	      37	  32366249 ns/op	172719325 B/op	  500046 allocs/op
+```
 
 #### Process Group
 
+When the app receives a Signal(SIGTERM, SIGINT, etc), go runtime will close all the running sub-processes, without the app knowing.
+To fix this, we can use `os/signal` package to listen to the signal and close the sub-processes.
+```go
+func main() {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
+	select {
+	case v := <-quit:
+		log.Infof("signal.Notify: %v", v)
+	case <-ctx.Done():
+		log.Infof("ctx.Done received")
+	}
+}
+```
 
+Even if the app intercepts the signal, it will not be able to close the sub-processes, because the sub-processes are running in a different process group.
+To fix this, we can use start the sub-processes in a new process group.
+```go
+	s.cmd = exec.CommandContext(s.ctx, "bash", "-c", s.command)
+	s.cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true, // create a new process group, prevent the command from receiving the SIGINT signal
+	}
+```
 
-
-
+and can cancel the context to stop the sub-processes.
+```go
+s.cancel()
+```
 
 
 

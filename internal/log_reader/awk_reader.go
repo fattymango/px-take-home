@@ -16,7 +16,7 @@ type AwkReader struct {
 	taskID uint64
 }
 
-func NewAwkReader(config *config.Config, logger *logger.Logger, taskID uint64) LogReader {
+func NewAwkReader(config *config.Config, logger *logger.Logger, taskID uint64) Reader {
 	return &AwkReader{
 		config: config,
 		logger: logger,
@@ -24,7 +24,6 @@ func NewAwkReader(config *config.Config, logger *logger.Logger, taskID uint64) L
 	}
 }
 
-// awk 'NR==1, NR==20 { print } NR>20 { exit }' task_logs/40.log
 func (l *AwkReader) Read(from, to int) ([]string, int, error) {
 	var output []byte
 	var err error
@@ -43,16 +42,12 @@ func (l *AwkReader) Read(from, to int) ([]string, int, error) {
 	}
 
 	switch {
-	case from == 0 && to == 0:
-		cmd = exec.Command("tail", "-n", "100", file)
-	case to != 0 && from == 0:
-		from = to - 100
-		if from <= 0 {
-			from = 0
+	case from == 0 && to == 0: // Get last 100 lines
+		from = totalLines - 100
+		if from < 1 {
+			from = 1
 		}
-		cmd = exec.Command("awk", fmt.Sprintf("NR==%d, NR==%d { print } NR>%d { exit }", from, to, to), file)
-	case from != 0 && to == 0:
-		to = from + 100
+		to = totalLines
 		cmd = exec.Command("awk", fmt.Sprintf("NR==%d, NR==%d { print } NR>%d { exit }", from, to, to), file)
 	default:
 		cmd = exec.Command("awk", fmt.Sprintf("NR==%d, NR==%d { print } NR>%d { exit }", from, to, to), file)

@@ -48,7 +48,6 @@ func NewServer(cfg *config.Config, logger *logger.Logger, db *db.DB) (*Server, e
 
 func (s *Server) Start() error {
 	s.logger.Info("Starting server...")
-	s.registerValidator()
 	s.RegisterRoutes()
 	s.sseManager.Start()
 	err := s.App.Listen(":" + s.config.Server.Port)
@@ -82,12 +81,4 @@ func newServices(cfg *config.Config, logger *logger.Logger, db *db.DB) *Services
 	return &Services{
 		TaskManager: taskManager,
 	}
-}
-
-func (s *Server) WithTransaction() (*Services, func() error, func() error, error) {
-	db, commit, rollback, err := s.db.NewTransaction()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return newServices(s.config, s.logger, db), commit, rollback, nil
 }

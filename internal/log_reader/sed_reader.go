@@ -16,7 +16,7 @@ type SedReader struct {
 	taskID uint64
 }
 
-func NewSedReader(config *config.Config, logger *logger.Logger, taskID uint64) LogReader {
+func NewSedReader(config *config.Config, logger *logger.Logger, taskID uint64) Reader {
 	return &SedReader{
 		config: config,
 		logger: logger,
@@ -42,17 +42,11 @@ func (l *SedReader) Read(from, to int) ([]string, int, error) {
 	}
 
 	switch {
-	case from == 0 && to == 0:
-		cmd = exec.Command("tail", "-n", "100", file)
-	case to != 0 && from == 0:
-		from = to - 100
-		if from < 1 {
-			from = 1
-		}
+	case from == 0 && to == 0: // Get last 100 lines
+		from = totalLines - 100
+		to = totalLines
 		cmd = exec.Command("sed", "-n", fmt.Sprintf("%d,%dp", from, to), file)
-	case from != 0 && to == 0:
-		to = from + 100
-		cmd = exec.Command("sed", "-n", fmt.Sprintf("%d,%dp", from, to), file)
+
 	default:
 		cmd = exec.Command("sed", "-n", fmt.Sprintf("%d,%dp", from, to), file)
 	}

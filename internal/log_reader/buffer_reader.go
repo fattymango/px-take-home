@@ -15,7 +15,7 @@ type BufferReader struct {
 	taskID uint64
 }
 
-func NewBufferReader(config *config.Config, logger *logger.Logger, taskID uint64) LogReader {
+func NewBufferReader(config *config.Config, logger *logger.Logger, taskID uint64) Reader {
 	return &BufferReader{
 		config: config,
 		logger: logger,

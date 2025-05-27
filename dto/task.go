@@ -4,7 +4,7 @@ import "github.com/fattymango/px-take-home/model"
 
 type CrtTask struct {
 	Name    string `json:"name" validate:"required"`
-	Command string `json:"command" validate:"required,not_malformed_command"`
+	Command string `json:"command" validate:"required"`
 }
 
 func (c *CrtTask) ToTask() *model.Task {
