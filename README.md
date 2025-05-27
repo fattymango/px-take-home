@@ -54,7 +54,7 @@ Here are some commands to test the task manager:
   ```
 - Print numbers from 1 to 100 with a delay of 0.01 seconds between each number
   ```bash
-  for i in $(seq 1 100); do echo $i; sleep 0.01; done
+  for i in $(seq 1 100); do echo $i; sleep 0.1; done
   ```
 - Malicious command that will delete the system files
   ```bash
