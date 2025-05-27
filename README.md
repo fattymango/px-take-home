@@ -121,6 +121,10 @@ The server can be configured using environment variables.
 
 ### Read Log files
 When reading log files, the server will use different readers based on the file size and the range of the logs to read.
+If the user wants to read the last 100 lines of the log file, the server will use the `TailHeadReader` which will use `tail` to perform the operation.
+If the user wants to read a specific range of a large log file, the server will use the `SedReader` which will use `sed` to perform the operation.
+If the user wants to read the whole log file, the server will use the `BufferReader` which will read the whole file into memory.
+
 ```go
 	switch {
 	case from == 0 && to == 0: // Get last 100 lines
@@ -138,6 +142,7 @@ When reading log files, the server will use different readers based on the file 
 	}
 ```
 
+Here are the benchmark results for the different readers with different file sizes and ranges:
 Benchmark results:
 ```
 BenchmarkTailHeadReader/DefaultLastLines-8         	                        146	  7228285 ns/op	  197962 B/op	     200 allocs/op
@@ -166,10 +171,10 @@ BenchmarkBufferReader/SpecificRange_HugeRange_30to90Percent-8        	      87	 
 BenchmarkBufferReader/SpecificRange_FullRange-8                      	      37	  32366249 ns/op	172719325 B/op	  500046 allocs/op
 ```
 
-####Process Group
+#### Process Group
 
-When the app receives a Signal(SIGTERM, SIGINT, etc), go runtime will close all the running sub-processes, without the app knowing.
-To fix this, we can use `os/signal` package to listen to the signal and close the sub-processes.
+When the app receives a Signal(SIGTERM, SIGINT, etc), go runtime will close all the running sub-processes, without the app knowing,
+to fix this, we can use `os/signal` package to listen to the signal and close the sub-processes.
 ```go
 func main() {
 	quit := make(chan os.Signal, 1)
@@ -187,16 +192,16 @@ func main() {
 }
 ```
 
-Even if the app intercepts the signal, it will not be able to close the sub-processes, because the sub-processes are running in a different process group.
-To fix this, we can use start the sub-processes in a new process group.
+Even if the app intercepts the signal, it will not be able to stop the runtime from closing the sub-processes,
+to fix this, we can start the sub-processes in a new process group.
 ```go
-	s.cmd = exec.CommandContext(s.ctx, "bash", "-c", s.command)
+	s.cmd = exec.CommandContext(s.ctx, "bash", "-c", s.command) // Command context is used to stop the command when the context is cancelled
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true, // create a new process group, prevent the command from receiving the SIGINT signal
 	}
 ```
 
-and can cancel the context to stop the sub-processes.
+and  then we can cancel the context to stop the sub-processes.
 ```go
 s.cancel()
 ```
