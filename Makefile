@@ -3,7 +3,7 @@
 #################### SWAGGER ####################
 .PHONY: swagger
 swagger:
-	@go get github.com/swaggo/swag@master
+	@go install github.com/swaggo/swag/cmd/swag@latest
 	@swag init  --parseDependency -g ./cmd/api/main.go -o ./api/swagger 
 
 
@@ -103,4 +103,19 @@ install-deps:
 .PHONY: clean-logs
 clean-logs:
 	@rm -rf task_logs
+
+
+#################### Docker ####################
+.PHONY: docker-build
+docker-build:
+	@docker build -t px-task-manager .
+
+.PHONY: docker-run
+docker-run:
+	@docker run -d -p 8888:8888 --name px-task-manager px-task-manager
+
+.PHONY: docker-stop
+docker-stop:
+	@docker stop px-task-manager
+
 

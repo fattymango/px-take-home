@@ -34,7 +34,7 @@ or manually
 
 ```bash
 docker build -t px-task-manager .
-docker run -d -p 8888:8888 px-task-manager
+docker docker run -d -p 8888:8888 --name px-task-manager px-task-manager
 ```
 
 
