@@ -121,6 +121,7 @@ The server can be configured using environment variables.
 
 ### Read Log files
 When reading log files, the server will use different readers based on the file size and the range of the logs to read.
+
 If the user wants to read the last 100 lines of the log file, the server will use the `TailHeadReader` which will use `tail` to perform the operation.
 If the user wants to read a specific range of a large log file, the server will use the `SedReader` which will use `sed` to perform the operation.
 If the user wants to read the whole log file, the server will use the `BufferReader` which will read the whole file into memory.
