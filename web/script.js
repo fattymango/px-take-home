@@ -13,7 +13,8 @@ const TaskStatus = {
 // Task Commands
 const TaskCommands = {
     'generate_100_random_numbers': 1,
-    'print_100000_prime_numbers': 2
+    'print_100000_prime_numbers': 2,
+    'fail_randomly': 3
 };
 
 // Event Types

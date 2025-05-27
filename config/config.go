@@ -18,7 +18,7 @@ type Server struct {
 }
 
 type Debug struct {
-	Debug bool `envconfig:"DEBUG"`
+	Debug bool `envconfig:"DEBUG" default:"true"`
 }
 
 type DB struct {

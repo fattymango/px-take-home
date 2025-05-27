@@ -89,8 +89,6 @@ func (t *TaskLogger) Listen() {
 	t.wg.Add(1)
 	ticker := time.NewTicker(FLUSH_INTERVAL)
 
-	t.logger.Infof("starting task logger listener with ticker interval of 100ms")
-
 	go func() {
 		defer t.wg.Done()
 		defer ticker.Stop()

@@ -1,7 +1,6 @@
 package dto
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/fattymango/px-take-home/model"
@@ -58,7 +57,6 @@ type ListTasks struct {
 func ToListTasks(tasks []*model.Task, total int) *ListTasks {
 	viewTasks := make([]*ViewTask, len(tasks))
 	for i, task := range tasks {
-		fmt.Println(task.ID, task.Name)
 		viewTasks[i] = ToViewTask(task)
 	}
 

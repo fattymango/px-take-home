@@ -259,7 +259,8 @@ func (t *TaskManager) executeTask(task *model.Task) error {
 	executor := NewJobExecutor(t.config, t.logger, job, t.taskUpdatesChan, t.logStream)
 	err := executor.Execute()
 	if err != nil {
-		t.logger.Errorf("failed to execute job #%d: %s", job.task.ID, err)
+		t.logger.Errorf("failed to execute job #%s: %s", job.task.ID, err)
+		return err
 	}
 
 	return nil

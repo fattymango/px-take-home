@@ -21,6 +21,8 @@ func NewTaskByCommand(config *config.Config, logger *logger.Logger, command mode
 	switch command {
 	case model.TaskCommand_Generate_100_Random_Numbers:
 		return NewGenerate100RandomNumbersTask(config, logger), nil
+	case model.TaskCommand_Fail_Randomly:
+		return NewFailRandomlyTask(config, logger), nil
 	default:
 		return nil, fmt.Errorf("unknown task command: %d", command)
 	}
@@ -74,5 +76,54 @@ func (t *Generate100RandomNumbersTask) Cancel() error {
 }
 
 func (t *Generate100RandomNumbersTask) Stream() <-chan string {
+	return t.stream
+}
+
+type FailRandomlyTask struct {
+	config *config.Config
+	logger *logger.Logger
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	stream chan string
+}
+
+func NewFailRandomlyTask(config *config.Config, logger *logger.Logger) *FailRandomlyTask {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &FailRandomlyTask{
+		config: config,
+		logger: logger,
+		ctx:    ctx,
+		cancel: cancel,
+		stream: make(chan string, 100),
+	}
+}
+
+func (t *FailRandomlyTask) Run() error {
+	luckyNumber := 5
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-t.ctx.Done():
+			t.logger.Infof("task cancelled")
+			return nil
+		case <-ticker.C:
+			number := rand.Intn(10)
+			if number == luckyNumber {
+				t.logger.Infof("lucky number was generated")
+				return fmt.Errorf("lucky number was generated")
+			}
+			t.stream <- fmt.Sprintf("%d", number)
+		}
+	}
+}
+func (t *FailRandomlyTask) Cancel() error {
+	t.cancel()
+	return nil
+}
+
+func (t *FailRandomlyTask) Stream() <-chan string {
 	return t.stream
 }

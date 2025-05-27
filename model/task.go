@@ -34,16 +34,19 @@ type TaskCommand uint8
 const (
 	TaskCommand_Generate_100_Random_Numbers TaskCommand = iota + 1
 	TaskCommand_Print_100000_Prime_Numbers
+	TaskCommand_Fail_Randomly
 )
 
 var (
 	TaskCommand_name = map[TaskCommand]string{
 		TaskCommand_Generate_100_Random_Numbers: "generate_100_random_numbers",
 		TaskCommand_Print_100000_Prime_Numbers:  "print_100000_prime_numbers",
+		TaskCommand_Fail_Randomly:               "fail_randomly",
 	}
 	TaskCommand_value = map[string]TaskCommand{
 		"generate_100_random_numbers": TaskCommand_Generate_100_Random_Numbers,
 		"print_100000_prime_numbers":  TaskCommand_Print_100000_Prime_Numbers,
+		"fail_randomly":               TaskCommand_Fail_Randomly,
 	}
 )
 

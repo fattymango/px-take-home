@@ -27,6 +27,7 @@ type JobExecutor struct {
 	taskChan  chan<- *JobMsg // channel to send task updates to the task manager
 	logStream chan<- *LogMsg // channel to send logs to the task manager
 
+	done       chan error
 	lineNumber atomic.Int64
 }
 
@@ -37,6 +38,7 @@ func NewJobExecutor(config *config.Config, logger *logger.Logger, job *Job, task
 		job:        job,
 		taskChan:   taskChan,
 		logStream:  logStream,
+		done:       make(chan error),
 		taskLogger: tasklogger.NewTaskLogger(config, logger, job.task.ID),
 		lineNumber: atomic.Int64{},
 	}
@@ -63,12 +65,7 @@ func (t *JobExecutor) Execute() error {
 	t.sendTaskRunning()
 
 	go func() {
-		err = t.task.Run()
-		if err != nil {
-			t.logger.Debugf("task failed: %s", err)
-			t.sendTaskFailed(err.Error())
-			return
-		}
+		t.done <- t.task.Run()
 	}()
 
 	for {
@@ -84,6 +81,21 @@ func (t *JobExecutor) Execute() error {
 				return nil
 			}
 			t.writeLog(line)
+		case err, ok := <-t.done:
+			t.logger.Infof("task done")
+			if !ok {
+				t.logger.Debugf("task failed: %s", err)
+				t.sendTaskFailed(err.Error())
+				return err
+			}
+			if err != nil {
+				t.logger.Debugf("task failed: %s", err)
+				t.sendTaskFailed(err.Error())
+				return err
+			}
+			t.logger.Infof("task completed")
+			t.sendTaskCompleted()
+			return nil
 		}
 	}
 
