@@ -15,6 +15,16 @@ func (c *CrtTask) ToTask() *model.Task {
 	}
 }
 
+type ViewTaskID struct {
+	TaskID uint64 `json:"task_id"`
+}
+
+func ToViewTaskID(id uint64) *ViewTaskID {
+	return &ViewTaskID{
+		TaskID: id,
+	}
+}
+
 type ViewTask struct {
 	ID        uint64           `json:"id"`
 	Name      string           `json:"name"`

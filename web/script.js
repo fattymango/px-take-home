@@ -151,8 +151,11 @@ async function handleCreateTask(e) {
 
         const result = await response.json();
         if (result.success) {
+            // The response now contains task_id instead of the full task object
+            const taskId = result.data.task_id;
+            console.log(`Task created successfully with ID: ${taskId}`);
             createTaskForm.reset();
-            fetchTasks(); // Refresh the tasks list
+            fetchTasks(); // Refresh the tasks list to show the new task
         } else {
             alert(`Failed to create task: ${result.error}`);
         }
