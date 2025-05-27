@@ -39,6 +39,11 @@ func (s *Server) GetTaskLogsByID(c *fiber.Ctx) error {
 		return dto.NewBadRequestResponse(c, err.Error())
 	}
 
+	if (filter.From > 0 && filter.To == 0) ||
+		(filter.From == 0 && filter.To > 0) {
+		return dto.NewBadRequestResponse(c, "to and from must be provided together")
+	}
+
 	if filter.From != 0 && filter.To != 0 && filter.From >= filter.To {
 		return dto.NewBadRequestResponse(c, "from must be less than to")
 	}

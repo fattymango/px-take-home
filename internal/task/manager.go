@@ -52,16 +52,15 @@ type TaskMsg struct {
 }
 
 type TaskManager struct {
-	config *config.Config
-	logger *logger.Logger
-	repo   TaskRepository
-	cache  JobCache
+	config    *config.Config
+	logger    *logger.Logger
+	repo      TaskRepository
+	cache     JobCache
+	logReader *logreader.LogReader
 
 	// Queue channel for queued tasks
 	taskQueue      chan *model.Task
 	taskQueueMutex sync.RWMutex
-	// task logger constructor, can be replaced with different implementations
-	newTasklogReader func(*config.Config, *logger.Logger, uint64) logreader.LogReader
 
 	// channel to receive task updates from task executors
 	taskUpdatesChan chan *JobMsg
@@ -94,11 +93,7 @@ func NewTaskManager(config *config.Config, logger *logger.Logger, repo TaskRepos
 
 		logStream:         make(chan *LogMsg, CH_BUF_SIZE),
 		taskUpdatesStream: make(chan *TaskMsg, CH_BUF_SIZE),
-
-		// newTasklogReader: tasklogger.NewTailHeadReader,
-		// newTasklogReader: tasklogger.NewSedReader,
-		// newTasklogReader: tasklogger.NewAwkReader,
-		newTasklogReader: logreader.NewBufferReader,
+		logReader:         logreader.NewLogReader(config, logger),
 	}
 }
 
@@ -327,9 +322,7 @@ func (t *TaskManager) TaskRunning(taskID uint64) error {
 }
 
 func (t *TaskManager) GetTaskLogs(taskID uint64, from, to int) ([]string, int, error) {
-	logReader := t.newTasklogReader(t.config, t.logger, taskID)
-
-	logs, totalLines, err := logReader.Read(from, to)
+	logs, totalLines, err := t.logReader.Read(taskID, from, to)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to read task logs: %w", err)
 	}

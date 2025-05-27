@@ -13,8 +13,8 @@ import (
 
 const (
 	testTaskID = uint64(1234)
-	numLines   = 500000 // 1M lines for aggressive benchmarks
-	lineSize   = 200    // Make each line longer for more realistic data
+	numLines   = 500000 // Number of lines in test file
+	lineSize   = 200    // Size of each line for more realistic data
 )
 
 var (
@@ -38,10 +38,7 @@ func setupBenchmark(b *testing.B) {
 		},
 	}
 
-	testLogger, err = logger.NewLogger(testConfig)
-	if err != nil {
-		b.Fatalf("Failed to create logger: %v", err)
-	}
+	testLogger = logger.NewTestLogger()
 
 	logFile := filepath.Join(tempDir, fmt.Sprintf("%d.log", testTaskID))
 	f, err := os.Create(logFile)
@@ -66,8 +63,10 @@ func cleanupBenchmark() {
 	os.RemoveAll(tempDir)
 }
 
-func runReaderBenchmark(b *testing.B, reader LogReader) {
-	b.Run("Latest100Lines", func(b *testing.B) {
+func runReaderBenchmark(b *testing.B, reader Reader) {
+	// Case 1: Default case - last 100 lines (from=0, to=0)
+	b.Run("DefaultLastLines", func(b *testing.B) {
+		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
 				_, _, _ = reader.Read(0, 0)
@@ -75,60 +74,35 @@ func runReaderBenchmark(b *testing.B, reader LogReader) {
 		})
 	})
 
-	b.Run("First100Lines", func(b *testing.B) {
-		b.RunParallel(func(pb *testing.PB) {
-			for pb.Next() {
-				_, _, _ = reader.Read(1, 100)
-			}
-		})
-	})
+	// Case 2: Specific range with both from and to > 0
+	// Test with different ranges to get a comprehensive view
+	ranges := []struct {
+		name     string
+		from, to int
+	}{
+		{"SmallRange_10Percent", numLines / 10, numLines/10 + 100},  // 10% into file
+		{"MidRange_25Percent", numLines / 4, numLines/4 + 500},      // 25% into file
+		{"LargeRange_50Percent", numLines / 2, numLines/2 + 1000},   // 50% into file
+		{"HugeRange_30to90Percent", numLines / 3, numLines / 3 * 2}, // 30% to 90% of file
+		{"FullRange", 1, numLines},                                  // All lines
+	}
 
-	b.Run("Last100Lines", func(b *testing.B) {
-		b.RunParallel(func(pb *testing.PB) {
-			for pb.Next() {
-				_, _, _ = reader.Read(numLines-100, numLines)
-			}
-		})
-	})
-
-	b.Run("Middle100Lines", func(b *testing.B) {
-		b.RunParallel(func(pb *testing.PB) {
-			for pb.Next() {
-				_, _, _ = reader.Read(numLines/2, numLines/2+100)
-			}
-		})
-	})
-
-	b.Run("RandomAccess", func(b *testing.B) {
-		b.RunParallel(func(pb *testing.PB) {
-			for pb.Next() {
-				start := int(float64(numLines) * (float64(b.N%100) / 100.0))
-				if start < 1 {
-					start = 1
+	for _, r := range ranges {
+		b.Run(fmt.Sprintf("SpecificRange_%s", r.name), func(b *testing.B) {
+			b.ResetTimer()
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					_, _, _ = reader.Read(r.from, r.to)
 				}
-				end := start + 100
-				if end > numLines {
-					end = numLines
-				}
-				_, _, _ = reader.Read(start, end)
-			}
+			})
 		})
-	})
+	}
 }
 
 func BenchmarkTailHeadReader(b *testing.B) {
 	setupBenchmark(b)
 	defer cleanupBenchmark()
 	reader := NewTailHeadReader(testConfig, testLogger, testTaskID)
-	b.ResetTimer()
-	runReaderBenchmark(b, reader)
-}
-
-func BenchmarkAwkReader(b *testing.B) {
-	setupBenchmark(b)
-	defer cleanupBenchmark()
-	reader := NewAwkReader(testConfig, testLogger, testTaskID)
-	b.ResetTimer()
 	runReaderBenchmark(b, reader)
 }
 
@@ -136,7 +110,13 @@ func BenchmarkSedReader(b *testing.B) {
 	setupBenchmark(b)
 	defer cleanupBenchmark()
 	reader := NewSedReader(testConfig, testLogger, testTaskID)
-	b.ResetTimer()
+	runReaderBenchmark(b, reader)
+}
+
+func BenchmarkAwkReader(b *testing.B) {
+	setupBenchmark(b)
+	defer cleanupBenchmark()
+	reader := NewAwkReader(testConfig, testLogger, testTaskID)
 	runReaderBenchmark(b, reader)
 }
 
@@ -144,6 +124,5 @@ func BenchmarkBufferReader(b *testing.B) {
 	setupBenchmark(b)
 	defer cleanupBenchmark()
 	reader := NewBufferReader(testConfig, testLogger, testTaskID)
-	b.ResetTimer()
 	runReaderBenchmark(b, reader)
 }

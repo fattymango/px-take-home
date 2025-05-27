@@ -15,7 +15,7 @@ type TailHeadReader struct {
 	taskID uint64
 }
 
-func NewTailHeadReader(config *config.Config, logger *logger.Logger, taskID uint64) LogReader {
+func NewTailHeadReader(config *config.Config, logger *logger.Logger, taskID uint64) Reader {
 	return &TailHeadReader{
 		config: config,
 		logger: logger,
@@ -40,38 +40,22 @@ func (l *TailHeadReader) Read(from, to int) ([]string, int, error) {
 	}
 
 	switch {
-	case from == 0 && to == 0:
+	case from == 0 && to == 0: // Get last 100 lines
 		// Get latest 100 lines
 		output, err = exec.Command("tail", "-n", "100", file).Output()
 
-	case to != 0 && from == 0:
-		from = to - 100
-		if from < 1 {
-			from = 1
-		}
-		count := to - from + 1
-		output, err = exec.Command("bash", "-c",
-			fmt.Sprintf("head -n %d %s | tail -n %d", to, file, count)).Output()
-
-	case from != 0 && to == 0:
-		to = from + 100
-		if to > totalLines {
-			to = totalLines
-		}
-		count := to - from + 1
-		output, err = exec.Command("bash", "-c",
-			fmt.Sprintf("head -n %d %s | tail -n %d", to, file, count)).Output()
-
 	default:
-		count := to - from + 1
 		if from < 1 {
 			from = 1
 		}
 		if to > totalLines {
 			to = totalLines
 		}
-		output, err = exec.Command("bash", "-c",
-			fmt.Sprintf("head -n %d %s | tail -n %d", to, file, count)).Output()
+		if to < from {
+			return result, totalLines, nil
+		}
+		count := to - from + 1
+		output, err = exec.Command("bash", "-c", fmt.Sprintf("head -n %d %s | tail -n %d", to, file, count)).Output()
 	}
 
 	if err != nil {
@@ -79,12 +63,6 @@ func (l *TailHeadReader) Read(from, to int) ([]string, int, error) {
 	}
 
 	lines := strings.Split(string(output), "\n")
-	var cleaned []string
-	for _, line := range lines {
-		if trimmed := strings.TrimSpace(line); trimmed != "" {
-			cleaned = append(cleaned, trimmed)
-		}
-	}
 
-	return cleaned, totalLines, nil
+	return lines, totalLines, nil
 }
