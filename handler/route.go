@@ -1,14 +1,11 @@
 package server
 
 import (
-	// _ "github.com/fattymango/px-take-home/api/swagger"
-
 	"os"
 
+	"github.com/fattymango/px-take-home/internal/middleware"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 
-	// fiberSwagger "github.com/swaggo/fiber-swagger"
 	"github.com/gofiber/contrib/swagger"
 )
 
@@ -17,11 +14,13 @@ func (s *Server) RegisterRoutes() {
 	root := s.App.Group("/")
 
 	// CORS Middleware
-	root.Use(cors.New())
+	root.Use(middleware.CORS())
 
-	// Loging Middleware
-	root.Use(s.middlewares.Logger)
-	// root.Use(s.middlewares.RateLimiter)
+	// Logging Middleware
+	root.Use(middleware.Logger(s.logger))
+
+	// Rate Limiter Middleware
+	// root.Use(middleware.RateLimiter(s.logger))
 
 	// Swagger UI
 	s.RegisterSwagger(root)
