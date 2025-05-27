@@ -262,73 +262,119 @@ Or find the generated swagger files in the `api/swagger` directory.
 ##### Create Task
 - **Method**: POST
 - **Path**: `/api/v1/tasks`
-- **Payload**:
+- **Request Body**:
   ```json
   {
-    "name": "string",
-    "command": "string"
+    "name": "string",     // required
+    "command": "string"   // required
   }
   ```
 - **Response**:
   ```json
   {
-    "id": "string",
-    "name": "string",
-    "command": "string",
-    "status": "string",
-    "created_at": "timestamp"
+    "success": true,
+    "data": {
+      "task_id": "number"
+    },
+    "code": 200,
+    "message": "string",
+    "error": null
   }
   ```
 
 ##### Get All Tasks
 - **Method**: GET
 - **Path**: `/api/v1/tasks`
+- **Query Parameters**:
+  - `offset` (number, optional): Pagination offset
+  - `limit` (number, optional): Number of tasks per page
+  - `status` (number, optional): Filter by task status (1=Queued, 2=Running, 3=Completed, 4=Failed, 5=Cancelled)
 - **Response**:
   ```json
   {
-    "tasks": [
-      {
-        "id": "string",
-        "name": "string",
-        "command": "string",
-        "status": "string",
-        "created_at": "timestamp"
-      }
-    ]
+    "success": true,
+    "data": {
+      "tasks": [
+        {
+          "id": "number",
+          "name": "string",
+          "command": "string",
+          "status": "number",
+          "reason": "string",
+          "exit_code": "number",
+          "start_time": "number",
+          "end_time": "number"
+        }
+      ],
+      "total": "number"
+    },
+    "code": 200,
+    "message": "string",
+    "error": null
   }
   ```
 
 ##### Get Task by ID
 - **Method**: GET
 - **Path**: `/api/v1/tasks/:taskID`
+- **Path Parameters**:
+  - `taskID` (number, required): ID of the task
 - **Response**:
   ```json
   {
-    "id": "string",
-    "name": "string",
-    "command": "string",
-    "status": "string",
-    "created_at": "timestamp"
+    "success": true,
+    "data": {
+      "id": "number",
+      "name": "string",
+      "command": "string",
+      "status": "number",
+      "reason": "string",
+      "exit_code": "number",
+      "start_time": "number",
+      "end_time": "number"
+    },
+    "code": 200,
+    "message": "string",
+    "error": null
   }
   ```
 
 ##### Get Task Logs
 - **Method**: GET
 - **Path**: `/api/v1/tasks/:taskID/logs`
+- **Path Parameters**:
+  - `taskID` (number, required): ID of the task
+- **Query Parameters**:
+  - `from` (number, optional): Start line number
+  - `to` (number, optional): End line number
+  > Note: `from` and `to` must be provided together if used
 - **Response**:
   ```json
   {
-    "logs": "string"
+    "success": true,
+    "data": {
+      "logs": ["string"],
+      "total_lines": "number"
+    },
+    "code": 200,
+    "message": "string",
+    "error": null
   }
   ```
 
 ##### Cancel Task
 - **Method**: DELETE
 - **Path**: `/api/v1/tasks/:taskID/cancel`
+- **Path Parameters**:
+  - `taskID` (number, required): ID of the task
 - **Response**:
   ```json
   {
-    "message": "Task cancelled successfully"
+    "success": true,
+    "data": null,
+    "code": 200,
+    "message": "Task cancelled successfully",
+    "error": null
   }
   ```
 
@@ -338,4 +384,32 @@ Or find the generated swagger files in the `api/swagger` directory.
 - **Method**: GET
 - **Path**: `/api/v1/events`
 - **Description**: Establishes an SSE connection for real-time updates
-- **Response**: Event stream with task updates
+- **Event Types**:
+  - Task Status Updates (type=1):
+    ```json
+    {
+      "task_id": "number",
+      "status": "number",
+      "reason": "string",
+      "exit_code": "number"
+    }
+    ```
+  - Log Updates (type=2):
+    ```json
+    {
+      "task_id": "number",
+      "line_number": "number",
+      "line": "string"
+    }
+    ```
+
+All endpoints may return the following error responses:
+```json
+{
+  "success": false,
+  "data": null,
+  "code": number,  // 400, 401, 404, or 500
+  "message": "string",
+  "error": "string"
+}
+```
