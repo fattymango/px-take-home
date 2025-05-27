@@ -42,21 +42,42 @@ docker docker run -d -p 8888:8888 --name px-task-manager px-task-manager
 
 Navigate to `http://localhost:8888` to access the task manager web client.
 
-### Create a new task
-Fill in the task name and command to run.
+### Web Client
 
+#### Create a new task
+Fill in the task name and command to run.
+##### Quick Commands
+Here are some commands to test the task manager:
+- Print "Hello World"
+  ```bash
+  echo "hello World"
+  ```
+- Print numbers from 1 to 100 with a delay of 0.01 seconds between each number
+  ```bash
+  for i in $(seq 1 100); do echo $i; sleep 0.01; done
+  ```
+- Malicious command that will delete the system files
+  ```bash
+  rm -rf /
+  ```
+- Failing command that will return a non-zero exit code
+  ```bash
+  cat non_existent_file
+  ```
+  
+  
 Then click on the "Create Task" button to create the task.
 
 ![alt](./docs/img/create_task.png)
 
-### View all tasks
+#### View all tasks
 
 Below the create task form, you can see all the tasks created and the status and exit code of the task.
 
 ![alt](./docs/img/view_tasks.png)
 
 
-### Cancel a task
+#### Cancel a task
 
 Click on the `Cancel` button to cancel the task, the button only appears when the task is running.
 
@@ -68,15 +89,42 @@ When the task is cancelled, the task will be shown in the main page with a `Canc
 
 
 
-### View task logs
+#### View task logs
 
 Click on `View Logs` button to view the logs of the task.
 
-![alt](./docs/img/view_task_logs_button.png)
+![alt](./docs/img/view_logs_button.png)
 
 Then you can see the logs of the task, if the task is still running, you can see the logs in real time.
 
 ![alt](./docs/img/view_task_logs.png)
+
+
+### Configuration
+
+The server can be configured using environment variables.
+
+| Variable | Description | Default | Notes |
+|----------|-------------|-----|-------|
+| CMD_VALIDATE | Whether to validate the command before running it | true |If enabled, shellcheck should be installed on the system |
+| SERVER_PORT | The port to run the server on | 8888 | |
+| TASK_LOGGER_DIR_PATH | The path to the task logger directory | ./task_logs | |
+| DB_FILE | SQLite database file path | ./db/px.db | |
+| SWAGGER_FILE_PATH | The path to the swagger file | ./api/swagger/swagger.json |
+
+
+
+
+### Trade Offs and Gotchas
+
+#### Read Log files
+
+#### Process Group
+
+
+
+
+
 
 
 
@@ -87,6 +135,12 @@ If swagger specification does not exist, you can generate it using the following
 
 ```bash
 make swagger
+```
+or manually
+
+```bash
+go install github.com/swaggo/swag/cmd/swag@latest
+swag init  --parseDependency -g ./cmd/api/main.go -o ./api/swagger 
 ```
 
 To access the documentation:
