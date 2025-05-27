@@ -188,6 +188,45 @@ async function fetchTasks() {
     }
 }
 
+// Helper function to format timestamps
+function formatTimestamp(timestamp) {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp * 1000); // Convert from Unix timestamp to milliseconds
+    return date.toLocaleString();
+}
+
+async function downloadLogs(taskId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/logs/download`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Get the filename from the Content-Disposition header if available
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = `task-${taskId}-logs.txt`;
+        if (contentDisposition) {
+            const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+            if (matches != null && matches[1]) {
+                filename = matches[1].replace(/['"]/g, '');
+            }
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (error) {
+        console.error('Error downloading logs:', error);
+        alert('Failed to download logs. Please try again.');
+    }
+}
+
 function renderTasks(data) {
     const { tasks, total } = data;
     if (!tasks || tasks.length === 0) {
@@ -198,29 +237,32 @@ function renderTasks(data) {
     tasksList.innerHTML = tasks.map(task => {
         const status = TaskStatus[task.status];
         const statusLower = status.toLowerCase();
+        const isRunning = task.status === 1 || task.status === 2; // Queued or Running
         
-        let actionButtons = '';
-        if (statusLower === 'queued' || statusLower === 'running') {
-            actionButtons = `<button onclick="cancelTask(${task.id})" class="cancel-btn">Cancel</button>`;
-        }
-
         return `
-        <div class="task-item" data-status="${statusLower}" data-task-id="${task.id}">
-            <div class="task-header">
-                <h3>${task.name}</h3>
-            </div>
-            <div class="task-info">
-                <p><strong>Command:</strong> ${task.command}</p>
-                <p><strong>Status:</strong> <span class="task-status status-${statusLower}">${status}</span></p>
-                <p class="exit-code"${task.exit_code === undefined ? ' style="display:none"' : ''}><strong>Exit Code:</strong> ${task.exit_code !== undefined ? task.exit_code : ''}</p>
-                <p class="reason"${!task.reason ? ' style="display:none"' : ''}><strong>Reason:</strong> ${task.reason || ''}</p>
+            <div class="task-item">
+                <div class="task-header">
+                    <h3>${task.name}</h3>
+                    <span class="status ${statusLower}">${status}</span>
+                </div>
+                <div class="task-details">
+                    <p><strong>Command:</strong> ${task.command}</p>
+                    <p><strong>Start Time:</strong> ${formatTimestamp(task.start_time)}</p>
+                    <p><strong>End Time:</strong> ${formatTimestamp(task.end_time)}</p>
+                    ${task.exit_code !== undefined && !isRunning ? 
+                        `<p><strong>Exit Code:</strong> ${task.exit_code}</p>` : ''}
+                    ${task.reason ? `<p><strong>Reason:</strong> ${task.reason}</p>` : ''}
+                </div>
                 <div class="task-actions">
-                    <button onclick="showLogs(${task.id})" class="view-logs-btn">View Logs</button>
-                    ${actionButtons}
+                    <button onclick="showLogs(${task.id})">View Logs</button>
+                    ${!isRunning ? 
+                        `<button class="download-btn" onclick="downloadLogs(${task.id})">Download Logs</button>` : ''}
+                    ${isRunning ? 
+                        `<button class="cancel-btn" onclick="cancelTask(${task.id})">Cancel</button>` : ''}
                 </div>
             </div>
-        </div>
-    `}).join('');
+        `;
+    }).join('');
 }
 
 function updatePaginationControls(data) {
@@ -428,7 +470,7 @@ function connectToSSE() {
             const data = JSON.parse(rawData);
             
             // Log the parsed message for debugging
-            console.debug('Parsed SSE message:', data);
+            // console.debug('Parsed SSE message:', data);
             
             // Handle ping messages
             if (data.ping !== undefined) {

@@ -31,9 +31,9 @@ func (l *AwkReader) Read(from, to int) ([]string, int, error) {
 	var cmd *exec.Cmd
 	var result []string
 	var totalLines int
-	file := formatFileName(l.config.TaskLogger.DirPath, l.taskID)
+	file := FormatFileName(l.config.TaskLogger.DirPath, l.taskID)
 
-	if !checkFileExists(file) {
+	if !CheckFileExists(file) {
 		return result, 0, nil
 	}
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/fattymango/px-take-home/app"
-	"github.com/pkg/profile"
+	// "github.com/pkg/profile"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 // @in header
 // @name Authorization
 func main() {
-	defer profile.Start(profile.CPUProfile, profile.ProfilePath("./profile/cpu")).Stop()
+	// defer profile.Start(profile.CPUProfile, profile.ProfilePath("./profile/cpu")).Stop()
 
 	fmt.Println("Starting PX Take Home API Server version", VERSION)
 	app.Start()

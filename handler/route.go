@@ -62,6 +62,7 @@ func (s *Server) RegisterTaskAPIs(router fiber.Router) {
 	task.Get("/", s.GetAllTasks)
 	task.Get("/:taskID", s.GetTaskByID)
 	task.Get("/:taskID/logs", s.GetTaskLogsByID)
+	task.Get("/:taskID/logs/download", s.DownloadTaskLogs)
 	task.Delete("/:taskID/cancel", s.CancelTask)
 }
 
