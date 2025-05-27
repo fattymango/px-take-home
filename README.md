@@ -94,7 +94,7 @@ Then you can see the logs of the task, if the task is still running, you can see
 
 ![alt](./docs/img/task_logs.png)
 
-##### Download Logs
+#### Download Logs
 
 Click on the `Download Logs` button to download the logs of the task.
 
@@ -117,9 +117,9 @@ The server can be configured using environment variables.
 
 
 
-### Trade Offs and Gotchas
+## Trade Offs and Gotchas
 
-#### Read Log files
+### Read Log files
 When reading log files, the server will use different readers based on the file size and the range of the logs to read.
 ```go
 	switch {
@@ -166,7 +166,7 @@ BenchmarkBufferReader/SpecificRange_HugeRange_30to90Percent-8        	      87	 
 BenchmarkBufferReader/SpecificRange_FullRange-8                      	      37	  32366249 ns/op	172719325 B/op	  500046 allocs/op
 ```
 
-#### Process Group
+####Process Group
 
 When the app receives a Signal(SIGTERM, SIGINT, etc), go runtime will close all the running sub-processes, without the app knowing.
 To fix this, we can use `os/signal` package to listen to the signal and close the sub-processes.
@@ -201,7 +201,28 @@ and can cancel the context to stop the sub-processes.
 s.cancel()
 ```
 
+### Real-time Updates
 
+The application uses Server-Sent Events (SSE) for real-time task status updates. Here's a comparison of different real-time update mechanisms and why SSE was chosen:
+
+| Feature | SSE | WebSocket | Long Polling |
+|---------|-----|-----------|--------------|
+| Connection Type | One-way (server to client) | Full-duplex (bidirectional) | One-way with repeated requests |
+| Protocol | HTTP | WebSocket (WS/WSS) | HTTP |
+| Connection Overhead | Low | Medium | High |
+| Client Implementation | Simple (native EventSource) | Complex | Simple |
+| Auto-Reconnection | Built-in | Manual implementation needed | Manual implementation needed |
+| Server Resources | Efficient | Medium | High (constant new connections) |
+| Use Case Fit | Perfect for server updates | Overkill for one-way updates | Inefficient for frequent updates |
+| Browser Support | Excellent | Excellent | Universal |
+| Bandwidth Usage | Efficient | Efficient | Inefficient (header overhead) |
+
+SSE was chosen for this application because:
+1. We only need one-way communication (server to client)
+2. Native browser support via EventSource makes client implementation simple
+3. Built-in reconnection handling improves reliability
+4. More efficient than long polling for frequent updates
+5. Lower overhead compared to WebSocket for our use case
 
 ## API Specification
 
