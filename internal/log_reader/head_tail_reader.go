@@ -28,9 +28,9 @@ func (l *TailHeadReader) Read(from, to int) ([]string, int, error) {
 	var err error
 	var result []string
 
-	file := formatFileName(l.config.TaskLogger.DirPath, l.taskID)
+	file := FormatFileName(l.config.TaskLogger.DirPath, l.taskID)
 
-	if !checkFileExists(file) {
+	if !CheckFileExists(file) {
 		return result, 0, nil
 	}
 

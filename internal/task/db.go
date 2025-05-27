@@ -1,6 +1,8 @@
 package task
 
 import (
+	"time"
+
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/model"
 	"github.com/fattymango/px-take-home/pkg/db"
@@ -77,17 +79,25 @@ func (t *TaskDB) UpdateTask(task *model.Task) error {
 	return t.db.Updates(task).Error
 }
 func (t *TaskDB) TaskCancelled(id uint64, reason string, exitCode int) error {
-	return t.db.Model(&model.Task{}).Where("id = ?", id).Updates(map[string]interface{}{"reason": reason, "status": model.TaskStatus_Cancelled, "exit_code": exitCode}).Error
+	return t.db.Model(&model.Task{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{"reason": reason, "status": model.TaskStatus_Cancelled, "exit_code": exitCode, "end_time": time.Now().Unix()}).Error
 }
 
 func (t *TaskDB) TaskFailed(id uint64, reason string, exitCode int) error {
-	return t.db.Model(&model.Task{}).Where("id = ?", id).Updates(map[string]interface{}{"reason": reason, "status": model.TaskStatus_Failed, "exit_code": exitCode}).Error
+	return t.db.Model(&model.Task{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{"reason": reason, "status": model.TaskStatus_Failed, "exit_code": exitCode, "end_time": time.Now().Unix()}).Error
 }
 
 func (t *TaskDB) TaskCompleted(id uint64, exitCode int) error {
-	return t.db.Model(&model.Task{}).Where("id = ?", id).Updates(map[string]interface{}{"status": model.TaskStatus_Completed, "exit_code": exitCode}).Error
+	return t.db.Model(&model.Task{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{"status": model.TaskStatus_Completed, "exit_code": exitCode, "end_time": time.Now().Unix()}).Error
 }
 
 func (t *TaskDB) TaskRunning(id uint64) error {
-	return t.db.Model(&model.Task{}).Where("id = ?", id).Updates(map[string]interface{}{"status": model.TaskStatus_Running}).Error
+	return t.db.Model(&model.Task{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{"status": model.TaskStatus_Running, "start_time": time.Now().Unix()}).Error
 }

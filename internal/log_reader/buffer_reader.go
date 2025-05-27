@@ -24,10 +24,10 @@ func NewBufferReader(config *config.Config, logger *logger.Logger, taskID uint64
 }
 
 func (l *BufferReader) Read(from, to int) ([]string, int, error) {
-	filePath := formatFileName(l.config.TaskLogger.DirPath, l.taskID)
+	filePath := FormatFileName(l.config.TaskLogger.DirPath, l.taskID)
 
 	// Check file exists
-	if !checkFileExists(filePath) {
+	if !CheckFileExists(filePath) {
 		return nil, 0, nil
 	}
 

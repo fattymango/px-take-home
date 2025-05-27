@@ -9,10 +9,11 @@ import (
 	"strings"
 )
 
-func formatFileName(dirpath string, taskID uint64) string {
+func FormatFileName(dirpath string, taskID uint64) string {
 	return filepath.Join(dirpath, fmt.Sprintf("%d.log", taskID))
 }
-func checkFileExists(filename string) bool {
+
+func CheckFileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return !os.IsNotExist(err)
 }

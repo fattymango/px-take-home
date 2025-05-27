@@ -3,6 +3,7 @@ package task
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/fattymango/px-take-home/config"
 	"github.com/fattymango/px-take-home/internal/shell"
@@ -142,23 +143,27 @@ func (t *JobExecutor) sendTaskFailed(reason string, exitCode int) {
 	t.job.task.Status = model.TaskStatus_Failed
 	t.job.task.Reason = reason
 	t.job.task.ExitCode = exitCode
+	t.job.task.EndTime = uint64(time.Now().Unix())
 	t.taskChan <- &JobMsg{op: op_TASK_FAILED, taskID: t.job.task.ID, reason: reason, exitCode: exitCode}
 }
 
 func (t *JobExecutor) sendTaskCompleted() {
 	t.job.task.Status = model.TaskStatus_Completed
 	t.job.task.ExitCode = 0
+	t.job.task.EndTime = uint64(time.Now().Unix())
 	t.taskChan <- &JobMsg{op: op_TASK_COMPLETED, taskID: t.job.task.ID, exitCode: 0}
 }
 
 func (t *JobExecutor) sendTaskRunning() {
 	t.job.task.Status = model.TaskStatus_Running
+	t.job.task.StartTime = uint64(time.Now().Unix())
 	t.taskChan <- &JobMsg{op: op_TASK_RUNNING, taskID: t.job.task.ID}
 }
 
 func (t *JobExecutor) sendTaskCancelled(exitCode int) {
 	t.logger.Infof("sending task cancelled")
 	t.job.task.Status = model.TaskStatus_Cancelled
+	t.job.task.EndTime = uint64(time.Now().Unix())
 	t.taskChan <- &JobMsg{op: op_TASK_CANCELLED, taskID: t.job.task.ID, reason: ReasonCancelledBySystem, exitCode: exitCode}
 	t.logger.Infof("task cancelled")
 }
