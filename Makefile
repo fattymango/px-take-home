@@ -98,7 +98,7 @@ fresh-start:
 .PHONY: install-deps
 install-deps:
 	@go mod tidy
-	@sudo apt  install shellcheck
+	@sudo apt install shellcheck
 
 .PHONY: clean-logs
 clean-logs:
