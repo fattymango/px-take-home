@@ -14,41 +14,35 @@ import (
 )
 
 type Server struct {
-	config      *config.Config
-	logger      *logger.Logger
-	App         *fiber.App
-	db          *db.DB
-	validator   *validator.Validate
-	middlewares *Middlewares
+	config    *config.Config
+	logger    *logger.Logger
+	App       *fiber.App
+	db        *db.DB
+	validator *validator.Validate
 
-	*Services
+	TaskManager *task.TaskManager
+
 	sseManager *sse.SseManager
 }
 
 func NewServer(cfg *config.Config, logger *logger.Logger, db *db.DB) (*Server, error) {
-	v := validator.New()
+	taskManager := task.NewTaskManager(cfg, logger, task.NewTaskDBStore(cfg, logger, db))
 
-	services := newServices(cfg, logger, db)
-
-	middlewares := &Middlewares{
-		RateLimiter: middleware.RateLimiter(logger),
-		Logger:      middleware.Logger(logger),
-	}
 	return &Server{
 		config:      cfg,
 		logger:      logger,
 		App:         fiber.New(),
 		db:          db,
-		validator:   v,
-		middlewares: middlewares,
-		Services:    services,
-		sseManager:  sse.NewSseManager(cfg, logger, services.TaskManager.TaskUpdatesStream(), services.TaskManager.LogStream()),
+		validator:   validator.New(),
+		TaskManager: taskManager,
+		sseManager:  sse.NewSseManager(cfg, logger, taskManager.TaskUpdatesStream(), taskManager.LogStream()),
 	}, nil
 }
 
 func (s *Server) Start() error {
 	s.logger.Info("Starting server...")
 	s.RegisterRoutes()
+	s.TaskManager.Start()
 	s.sseManager.Start()
 	err := s.App.Listen(":" + s.config.Server.Port)
 	if err != nil {
@@ -71,14 +65,9 @@ type Middlewares struct {
 	Logger      fiber.Handler
 }
 
-type Services struct {
-	TaskManager *task.TaskManager
-}
-
-func newServices(cfg *config.Config, logger *logger.Logger, db *db.DB) *Services {
-	taskManager := task.NewTaskManager(cfg, logger, task.NewTaskDBStore(cfg, logger, db))
-	taskManager.Start()
-	return &Services{
-		TaskManager: taskManager,
+func newMiddlewares(logger *logger.Logger) *Middlewares {
+	return &Middlewares{
+		RateLimiter: middleware.RateLimiter(logger),
+		Logger:      middleware.Logger(logger),
 	}
 }
