@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/fattymango/px-take-home/dto"
-	"github.com/fattymango/px-take-home/internal/task"
 	"github.com/fattymango/px-take-home/pkg/ctxstore"
 	"github.com/gofiber/fiber/v2"
 )
@@ -17,11 +16,11 @@ import (
 // @Accept json
 // @Produce json
 //
-//	@Success	200	{object} dto.ViewTask "Success"
-//	@Failure	400	{object} dto.BaseResponse	"Bad Request"
-//	@Failure	401	{object} dto.BaseResponse	"Unauthorized"
-//	@Failure	404	{object} dto.BaseResponse	"Not Found"
-//	@Failure	500	{object} dto.BaseResponse	"Internal Server Error"
+// @Success	200	{object} dto.ViewTaskID "Success"
+// @Failure	400	{object} dto.BaseResponse	"Bad Request"
+// @Failure	401	{object} dto.BaseResponse	"Unauthorized"
+// @Failure	404	{object} dto.BaseResponse	"Not Found"
+// @Failure	500	{object} dto.BaseResponse	"Internal Server Error"
 //
 // @Security BearerAuth
 // @ID CreateTask
@@ -40,12 +39,14 @@ func (s *Server) CreateTask(c *fiber.Ctx) error {
 		return dto.NewInternalServerErrorResponse(c, fmt.Sprintf("failed to create task: %s", err))
 	}
 
-	err = s.TaskManager.QueueTask(task)
-	if err != nil {
-		return dto.NewInternalServerErrorResponse(c, fmt.Sprintf("failed to queue task: %s", err))
-	}
+	go func() {
+		err = s.TaskManager.QueueTask(task)
+		if err != nil {
+			s.logger.Error("failed to queue task", "error", err)
+		}
+	}()
 
-	return dto.NewSuccessResponse(c, dto.ToViewTask(task))
+	return dto.NewSuccessResponse(c, dto.ToViewTaskID(task.ID))
 }
 
 // @Tags Task
@@ -56,11 +57,11 @@ func (s *Server) CreateTask(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 //
-//	@Success	200	{object} dto.ViewTask "Success"
-//	@Failure	400	{object} dto.BaseResponse	"Bad Request"
-//	@Failure	401	{object} dto.BaseResponse	"Unauthorized"
-//	@Failure	404	{object} dto.BaseResponse	"Not Found"
-//	@Failure	500	{object} dto.BaseResponse	"Internal Server Error"
+// @Success	200	{object} dto.ListTasks "Success"
+// @Failure	400	{object} dto.BaseResponse	"Bad Request"
+// @Failure	401	{object} dto.BaseResponse	"Unauthorized"
+// @Failure	404	{object} dto.BaseResponse	"Not Found"
+// @Failure	500	{object} dto.BaseResponse	"Internal Server Error"
 //
 // @Security BearerAuth
 // @ID GetAllTasks
@@ -86,6 +87,8 @@ func (s *Server) GetAllTasks(c *fiber.Ctx) error {
 // @Description Get task by ID
 // @Accept json
 // @Produce json
+//
+// @Param taskID path string true "Task ID"
 //
 //	@Success	200	{object} dto.ViewTask "Success"
 //	@Failure	400	{object} dto.BaseResponse	"Bad Request"
@@ -117,23 +120,25 @@ func (s *Server) GetTaskByID(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 //
-//	@Success	200	{object} dto.BaseResponse "Success"
-//	@Failure	400	{object} dto.BaseResponse	"Bad Request"
-//	@Failure	401	{object} dto.BaseResponse	"Unauthorized"
-//	@Failure	404	{object} dto.BaseResponse	"Not Found"
-//	@Failure	500	{object} dto.BaseResponse	"Internal Server Error"
+// @Param taskID path string true "Task ID"
+//
+// @Success	200	{object} dto.BaseResponse "Success"
+// @Failure	400	{object} dto.BaseResponse	"Bad Request"
+// @Failure	401	{object} dto.BaseResponse	"Unauthorized"
+// @Failure	404	{object} dto.BaseResponse	"Not Found"
+// @Failure	500	{object} dto.BaseResponse	"Internal Server Error"
 //
 // @Security BearerAuth
 // @ID CancelTask
 func (s *Server) CancelTask(c *fiber.Ctx) error {
 	taskID, err := ctxstore.GetTaskIDFromCtx(c)
 	if err != nil {
-		return dto.NewBadRequestResponse(c, err.Error())
+		return dto.NewBadRequestResponse(c, fmt.Sprintf("failed to get task ID: %s", err))
 	}
 
-	err = s.TaskManager.CancelTask(taskID, task.ReasonCancelledByUser, -1)
+	err = s.TaskManager.CancelTask(taskID)
 	if err != nil {
-		return dto.NewInternalServerErrorResponse(c, err.Error())
+		return dto.NewInternalServerErrorResponse(c, fmt.Sprintf("failed to cancel task: %s", err))
 	}
 
 	return dto.NewSuccessResponse(c, nil)

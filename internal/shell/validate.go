@@ -23,6 +23,5 @@ func ValidateMaliciousCommand(command string) (string, bool) {
 }
 
 func ParseCommand(command string) ([]string, error) {
-	parts, err := shellwords.Parse(command)
-	return parts, err
+	return shellwords.Parse(command)
 }

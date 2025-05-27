@@ -17,26 +17,32 @@ import (
 // @Description Get task logs by ID
 // @Accept json
 // @Produce json
-// @Param taskID path int true "Task ID"
-// @Param filter body dto.TaskLogFilter true "Filter"
 //
-//	@Success	200	{object} dto.ViewTaskLogs "Success"
-//	@Failure	400	{object} dto.BaseResponse	"Bad Request"
-//	@Failure	401	{object} dto.BaseResponse	"Unauthorized"
-//	@Failure	404	{object} dto.BaseResponse	"Not Found"
-//	@Failure	500	{object} dto.BaseResponse	"Internal Server Error"
+// @Param taskID path int true "Task ID"
+// @Param filter query dto.TaskLogFilter true "Filter"
+//
+// @Success	200	{object} dto.ViewTaskLogs "Success"
+// @Failure	400	{object} dto.BaseResponse	"Bad Request"
+// @Failure	401	{object} dto.BaseResponse	"Unauthorized"
+// @Failure	404	{object} dto.BaseResponse	"Not Found"
+// @Failure	500	{object} dto.BaseResponse	"Internal Server Error"
 //
 // @Security BearerAuth
 // @ID GetTaskLogsByID
 func (s *Server) GetTaskLogsByID(c *fiber.Ctx) error {
 	taskID, err := ctxstore.GetTaskIDFromCtx(c)
 	if err != nil {
-		return dto.NewBadRequestResponse(c, err.Error())
+		return dto.NewBadRequestResponse(c, fmt.Sprintf("failed to get task ID: %s", err))
 	}
 
-	filter := &dto.TaskLogFilter{}
-	if err := c.QueryParser(filter); err != nil {
-		return dto.NewBadRequestResponse(c, err.Error())
+	_, err = s.TaskManager.GetTask(taskID)
+	if err != nil {
+		return dto.NewNotFoundResponse(c, fmt.Sprintf("task #%d not found", taskID))
+	}
+
+	filter, err := ctxstore.GetTaskLogFilterFromCtx(c)
+	if err != nil {
+		return dto.NewBadRequestResponse(c, fmt.Sprintf("failed to get task log filter: %s", err))
 	}
 
 	if (filter.From > 0 && filter.To == 0) ||
@@ -79,10 +85,9 @@ func (s *Server) DownloadTaskLogs(c *fiber.Ctx) error {
 		return dto.NewBadRequestResponse(c, err.Error())
 	}
 
-	// Get task to check its status
 	task, err := s.TaskManager.GetTask(taskID)
 	if err != nil {
-		return dto.NewInternalServerErrorResponse(c, err.Error())
+		return dto.NewNotFoundResponse(c, fmt.Sprintf("task #%d not found", taskID))
 	}
 
 	// Only allow downloading logs for completed, failed, or canceled tasks
@@ -90,15 +95,12 @@ func (s *Server) DownloadTaskLogs(c *fiber.Ctx) error {
 		return dto.NewBadRequestResponse(c, "cannot download logs for running or queued tasks")
 	}
 
-	// Get the log file path
 	logFilePath := logreader.FormatFileName(s.config.TaskLogger.DirPath, taskID)
 
-	// Check if the file exists
 	if !logreader.CheckFileExists(logFilePath) {
 		return dto.NewNotFoundResponse(c, "log file not found")
 	}
 
-	// Set response headers
 	c.Set("Content-Type", "text/plain")
 	c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="task-%d.log"`, taskID))
 

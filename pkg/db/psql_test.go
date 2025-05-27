@@ -1,140 +1,145 @@
 package db
 
 import (
-	"reflect"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/fattymango/px-take-home/config"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestNewMysqDB(t *testing.T) {
-
-	testCases := []struct {
-		Name          string
-		Config        *config.Config
-		CheckResponse func(t *testing.T, d *DB, err error)
-	}{
-		{
-			Name: "OK",
-			Config: &config.Config{
-				DB: config.DB{
-					Host:     "localhost",
-					Port:     "5432",
-					User:     "crm",
-					Password: "crm.123",
-					Name:     "postgres",
-					SSLMode:  "disable",
-				},
-			},
-			CheckResponse: func(t *testing.T, d *DB, err error) {
-				require.NoError(t, err)
-				require.NotNil(t, d)
-			},
-		},
-		{
-			Name: "InvalidURL",
-			Config: &config.Config{
-				DB: config.DB{
-					Host:     "localhost",
-					Port:     "5432",
-					User:     "crm",
-					Password: "crm.123",
-					Name:     "postgres",
-					SSLMode:  "disable",
-				},
-			},
-			CheckResponse: func(t *testing.T, d *DB, err error) {
-				require.Error(t, err)
-				require.Nil(t, d)
-			},
-		},
-		{
-			Name: "InvalidCredentials",
-			Config: &config.Config{
-				DB: config.DB{
-					Host:     "localhost",
-					Port:     "5432",
-					User:     "invalid",
-					Password: "invalid",
-					Name:     "invalid",
-					SSLMode:  "disable",
-				},
-			},
-			CheckResponse: func(t *testing.T, d *DB, err error) {
-				require.Error(t, err)
-				require.Nil(t, d)
-			},
-		},
-		{
-			Name: "InvalidDBName",
-			Config: &config.Config{
-				DB: config.DB{
-					Host:     "localhost",
-					Port:     "5432",
-					User:     "crm",
-					Password: "crm.123",
-					Name:     "invalid",
-					SSLMode:  "disable",
-				},
-			},
-			CheckResponse: func(t *testing.T, d *DB, err error) {
-				require.Error(t, err)
-				require.Nil(t, d)
-			},
+func TestNewPsqlDB_Success(t *testing.T) {
+	// Use environment variables or default test values
+	cfg := &config.Config{
+		DB: config.DB{
+			Host:            getEnvOrDefault("POSTGRES_HOST", "localhost"),
+			Port:            getEnvOrDefault("POSTGRES_PORT", "5432"),
+			User:            getEnvOrDefault("POSTGRES_USER", "postgres"),
+			Password:        getEnvOrDefault("POSTGRES_PASSWORD", "postgres"),
+			Name:            getEnvOrDefault("POSTGRES_DB", "postgres"),
+			SSLMode:         "disable",
+			MaxIdleConns:    2,
+			MaxOpenConns:    5,
+			MaxConnLifetime: 10,
 		},
 	}
 
-	for i := range testCases {
-		t.Run(testCases[i].Name, func(t *testing.T) {
-			db, err := NewSQLiteDB(testCases[i].Config)
-			testCases[i].CheckResponse(t, db, err)
-		})
-	}
+	// Initialize database
+	db, err := NewPsqlDB(cfg)
+	assert.NoError(t, err)
+	assert.NotNil(t, db)
+
+	// Verify the database connection works
+	sqlDB, err := db.DB.DB()
+	assert.NoError(t, err)
+	assert.NoError(t, sqlDB.Ping())
+
+	// Close the connection
+	assert.NoError(t, sqlDB.Close())
 }
 
-func TestNewTestPsqlDB(t *testing.T) {
-	type User struct {
-		ID   int
-		Name string
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
 	}
-	type args struct {
-		cfg *config.Config
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-		{
-			name: "OK",
-			args: args{
-				cfg: &config.Config{},
-			},
-			wantErr: false,
+	return defaultValue
+}
+
+func TestNewPsqlDB_ConnectionFailure(t *testing.T) {
+	// Create config with invalid connection details
+	cfg := &config.Config{
+		DB: config.DB{
+			Host:            "nonexistent-host",
+			Port:            "5432",
+			User:            "testuser",
+			Password:        "testpass",
+			Name:            "testdb",
+			SSLMode:         "disable",
+			MaxIdleConns:    2,
+			MaxOpenConns:    5,
+			MaxConnLifetime: 10,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			db, err := NewSQLiteDB(tt.args.cfg)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewTestPsqlDB() error = %v, wantErr %v", err, tt.wantErr)
-				return
+
+	// Try to initialize database - should fail after retries
+	startTime := time.Now()
+	db, err := NewPsqlDB(cfg)
+	duration := time.Since(startTime)
+
+	// Verify error handling
+	assert.Error(t, err)
+	assert.Nil(t, db)
+	assert.Contains(t, err.Error(), "failed to connect to PostgreSQL after retries")
+
+	// Verify that retries occurred (should take around 3 * 2 seconds due to retry logic)
+	assert.GreaterOrEqual(t, duration, 6*time.Second, "Should have attempted retries")
+}
+
+func TestNewPsqlDB_InvalidConfig(t *testing.T) {
+	// Test cases with invalid configurations
+	testCases := []struct {
+		name        string
+		config      config.DB
+		errorString string
+	}{
+		{
+			name: "Empty Host",
+			config: config.DB{
+				Host:            "",
+				Port:            "5432",
+				User:            "testuser",
+				Password:        "testpass",
+				Name:            "testdb",
+				SSLMode:         "disable",
+				MaxIdleConns:    2,
+				MaxOpenConns:    5,
+				MaxConnLifetime: 10,
+			},
+			errorString: "failed to connect to PostgreSQL after retries",
+		},
+		{
+			name: "Invalid Port",
+			config: config.DB{
+				Host:            "localhost",
+				Port:            "invalid",
+				User:            "testuser",
+				Password:        "testpass",
+				Name:            "testdb",
+				SSLMode:         "disable",
+				MaxIdleConns:    2,
+				MaxOpenConns:    5,
+				MaxConnLifetime: 10,
+			},
+			errorString: "failed to connect to PostgreSQL after retries",
+		},
+		{
+			name: "Empty Database Name",
+			config: config.DB{
+				Host:            "localhost",
+				Port:            "5432",
+				User:            "testuser",
+				Password:        "testpass",
+				Name:            "",
+				SSLMode:         "disable",
+				MaxIdleConns:    2,
+				MaxOpenConns:    5,
+				MaxConnLifetime: 10,
+			},
+			errorString: "failed to connect to PostgreSQL after retries",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{
+				DB: tc.config,
 			}
 
-			db.AutoMigrate(&User{})
-			db.Create(&User{ID: 1, Name: "John"})
-			u := User{}
-			err = db.Where("id = ?", 1).First(&u).Error
-			if err != nil {
-				t.Errorf("NewTestPsqlDB() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(u, User{ID: 1, Name: "John"}) {
-				t.Errorf("NewTestPsqlDB() = %v, want %v", u, User{ID: 1, Name: "John"})
-			}
-
+			db, err := NewPsqlDB(cfg)
+			assert.Error(t, err)
+			assert.Nil(t, db)
+			assert.Contains(t, err.Error(), tc.errorString)
 		})
 	}
 }

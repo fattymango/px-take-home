@@ -3,6 +3,7 @@ package ctxstore
 import (
 	"fmt"
 
+	"github.com/fattymango/px-take-home/dto"
 	"github.com/fattymango/px-take-home/model"
 	"github.com/gofiber/fiber/v2"
 )
@@ -14,6 +15,15 @@ func GetTaskIDFromCtx(ctx *fiber.Ctx) (uint64, error) {
 	}
 
 	return uint64(taskID), nil
+}
+
+func GetTaskLogFilterFromCtx(ctx *fiber.Ctx) (*dto.TaskLogFilter, error) {
+	filter := &dto.TaskLogFilter{}
+	if err := ctx.QueryParser(filter); err != nil {
+		return nil, fmt.Errorf("failed to parse task log filter: %w", err)
+	}
+
+	return filter, nil
 }
 
 func GetOffsetLimitQueryFromCtx(ctx *fiber.Ctx) (int, int) {

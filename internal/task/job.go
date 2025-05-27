@@ -12,7 +12,6 @@ type Job struct {
 	task   *model.Task
 	ctx    context.Context
 	cancel context.CancelFunc
-	wg     *sync.WaitGroup
 }
 
 func NewJob(task *model.Task) *Job {
