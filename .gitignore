@@ -2,7 +2,7 @@ bin/
 logs/
 .env
 .env.debug
-db/
+px.db
 task_logs/
 profile/
 .vscode/
