@@ -19,5 +19,5 @@ export SERVER_HOST=localhost
 export LOG_FILE=logs/server.log
 export DEBUG=true
 export SWAGGER_FILE_PATH=./api/swagger/swagger.json
-export CMD_VALIDATE=true
+export CMD_VALIDATE=false
 export TASK_LOGGER_DIR_PATH=./task_logs
