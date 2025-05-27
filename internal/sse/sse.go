@@ -20,7 +20,7 @@ const (
 
 type Msg struct {
 	Event  EventType   `json:"event"`
-	TaskID uint64      `json:"task_id"`
+	TaskID string      `json:"task_id"`
 	Value  interface{} `json:"value"`
 }
 

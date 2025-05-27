@@ -21,18 +21,26 @@ definitions:
     type: object
   dto.ViewTask:
     properties:
-      command:
+      canceled_at:
         type: string
-      exit_code:
-        type: integer
+      command:
+        $ref: '#/definitions/model.TaskCommand'
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      failed_at:
+        type: string
       id:
-        type: integer
+        type: string
       name:
         type: string
       reason:
         type: string
       status:
         $ref: '#/definitions/model.TaskStatus'
+      updated_at:
+        type: string
     type: object
   dto.ViewTaskLogs:
     properties:
@@ -43,6 +51,14 @@ definitions:
       total_lines:
         type: integer
     type: object
+  model.TaskCommand:
+    enum:
+    - 1
+    - 2
+    type: integer
+    x-enum-varnames:
+    - TaskCommand_Generate_100_Random_Numbers
+    - TaskCommand_Print_100000_Prime_Numbers
   model.TaskStatus:
     enum:
     - 1

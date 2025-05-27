@@ -23,7 +23,7 @@ type TaskLogger struct {
 	config *config.Config
 	logger *logger.Logger
 
-	taskID  uint64
+	taskID  string
 	logFile *os.File
 	buffer  *bufio.Writer
 	wg      sync.WaitGroup
@@ -34,7 +34,7 @@ type TaskLogger struct {
 	ch chan []byte
 }
 
-func NewTaskLogger(config *config.Config, logger *logger.Logger, taskID uint64) *TaskLogger {
+func NewTaskLogger(config *config.Config, logger *logger.Logger, taskID string) *TaskLogger {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &TaskLogger{
 		config: config,
@@ -53,7 +53,7 @@ func (t *TaskLogger) CreateLogFile() error {
 		return fmt.Errorf("failed to create task log directory: %w", err)
 	}
 
-	logFilePath := filepath.Join(taskLogDir, fmt.Sprintf("%d.log", t.taskID))
+	logFilePath := filepath.Join(taskLogDir, fmt.Sprintf("%s.log", t.taskID))
 	logFile, err := os.Create(logFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to create task log file: %w", err)
@@ -65,8 +65,8 @@ func (t *TaskLogger) CreateLogFile() error {
 	return nil
 }
 
-func (t *TaskLogger) Write(line []byte) {
-	t.ch <- line
+func (t *TaskLogger) Write(line string) {
+	t.ch <- []byte(line)
 }
 
 func (t *TaskLogger) write(p []byte) (n int, err error) {
@@ -104,7 +104,6 @@ func (t *TaskLogger) Listen() {
 				}
 				t.write(line)
 			case <-ticker.C:
-				// t.logger.Debugf("flushing buffer on ticker")
 				if err := t.buffer.Flush(); err != nil {
 					t.logger.Errorf("failed to flush buffer on ticker: %v", err)
 				}

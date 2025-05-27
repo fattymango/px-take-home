@@ -12,10 +12,10 @@ import (
 type BufferReader struct {
 	config *config.Config
 	logger *logger.Logger
-	taskID uint64
+	taskID string
 }
 
-func NewBufferReader(config *config.Config, logger *logger.Logger, taskID uint64) LogReader {
+func NewBufferReader(config *config.Config, logger *logger.Logger, taskID string) LogReader {
 	return &BufferReader{
 		config: config,
 		logger: logger,

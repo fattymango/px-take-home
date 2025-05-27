@@ -10,7 +10,6 @@ import (
 	"github.com/fattymango/px-take-home/config"
 	server "github.com/fattymango/px-take-home/handler"
 
-	"github.com/fattymango/px-take-home/pkg/db"
 	"github.com/fattymango/px-take-home/pkg/logger"
 )
 
@@ -28,25 +27,9 @@ func Start() {
 		panic(fmt.Errorf("failed to create logger: %s", err))
 	}
 
-	// DB connection
-	log.Info("Creating db connection...")
-	db, err := db.NewSQLiteDB(cfg)
-	if err != nil {
-		log.Fatalf("failed to create db connection: %s", err)
-	}
-	log.Info("DB connection successful")
-
-	// Migrate
-	log.Info("Migrating...")
-	err = Migrate(cfg, db)
-	if err != nil {
-		log.Fatalf("failed to migrate: %s", err)
-	}
-	log.Info("Migration successful")
-
 	// Create server
 	log.Info("Creating server...")
-	s, err := server.NewServer(cfg, log, db)
+	s, err := server.NewServer(cfg, log)
 	if err != nil {
 		log.Fatalf("failed to create server: %s", err)
 	}

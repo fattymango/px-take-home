@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-func formatFileName(dirpath string, taskID uint64) string {
-	return filepath.Join(dirpath, fmt.Sprintf("%d.log", taskID))
+func formatFileName(dirpath string, taskID string) string {
+	return filepath.Join(dirpath, fmt.Sprintf("%s.log", taskID))
 }
 func checkFileExists(filename string) bool {
 	_, err := os.Stat(filename)

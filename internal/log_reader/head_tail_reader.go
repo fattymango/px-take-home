@@ -12,10 +12,10 @@ import (
 type TailHeadReader struct {
 	config *config.Config
 	logger *logger.Logger
-	taskID uint64
+	taskID string
 }
 
-func NewTailHeadReader(config *config.Config, logger *logger.Logger, taskID uint64) LogReader {
+func NewTailHeadReader(config *config.Config, logger *logger.Logger, taskID string) LogReader {
 	return &TailHeadReader{
 		config: config,
 		logger: logger,

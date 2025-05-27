@@ -1,20 +1,19 @@
 // API Configuration
 const API_BASE_URL = 'http://localhost:8888/api/v1';
 
-// Pagination State
-let paginationState = {
-    currentPage: 1,
-    pageSize: 10,
-    totalTasks: 0
-};
-
 // Task Status Mapping
 const TaskStatus = {
     1: 'Queued',
     2: 'Running',
     3: 'Completed',
     4: 'Failed',
-    5: 'Canceled'
+    5: 'Cancelled'
+};
+
+// Task Commands
+const TaskCommands = {
+    'generate_100_random_numbers': 1,
+    'print_100000_prime_numbers': 2
 };
 
 // Event Types
@@ -32,10 +31,6 @@ const refreshLogsBtn = document.getElementById('refreshLogs');
 const fromLineInput = document.getElementById('fromLine');
 const toLineInput = document.getElementById('toLine');
 const fetchRangeBtn = document.getElementById('fetchRange');
-const prevPageBtn = document.getElementById('prevPage');
-const nextPageBtn = document.getElementById('nextPage');
-const pageSizeSelect = document.getElementById('pageSize');
-const pageInfo = document.getElementById('pageInfo');
 
 let currentTaskId = null;
 let isLoadingLogs = false;
@@ -76,26 +71,11 @@ refreshLogsBtn.addEventListener('click', () => {
 });
 fetchRangeBtn.addEventListener('click', () => {
     if (currentTaskId) {
-        const from = parseInt(fromLineInput.value) || 0;
-        const to = parseInt(toLineInput.value) || 0;
+        const from = parseInt(fromLineInput.value) || 1;
+        const to = parseInt(toLineInput.value) || 100;
         resetLogState();
         fetchLogs(currentTaskId, from, to);
     }
-});
-prevPageBtn.addEventListener('click', () => {
-    if (paginationState.currentPage > 1) {
-        paginationState.currentPage--;
-        fetchTasks();
-    }
-});
-nextPageBtn.addEventListener('click', () => {
-    paginationState.currentPage++;
-    fetchTasks();
-});
-pageSizeSelect.addEventListener('change', (e) => {
-    paginationState.pageSize = parseInt(e.target.value);
-    paginationState.currentPage = 1;  // Reset to first page when changing page size
-    fetchTasks();
 });
 
 // Close modal when clicking outside
@@ -127,12 +107,23 @@ function resetLogState() {
 // Fetch tasks on page load
 document.addEventListener('DOMContentLoaded', fetchTasks);
 
-async function handleCreateTask(e) {
-    e.preventDefault();
+async function handleCreateTask(event) {
+    event.preventDefault();
     
-    const taskName = document.getElementById('taskName').value;
-    const taskCommand = document.getElementById('taskCommand').value;
+    const name = document.getElementById('taskName').value;
+    const commandStr = document.getElementById('taskCommand').value;
     
+    if (!name || !commandStr) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    const command = TaskCommands[commandStr];
+    if (!command) {
+        alert('Invalid command selected');
+        return;
+    }
+
     try {
         const response = await fetch(`${API_BASE_URL}/tasks`, {
             method: 'POST',
@@ -140,9 +131,9 @@ async function handleCreateTask(e) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                name: taskName,
-                command: taskCommand
-            })
+                name: name,
+                command: command
+            }),
         });
 
         if (!response.ok) {
@@ -151,26 +142,20 @@ async function handleCreateTask(e) {
 
         const result = await response.json();
         if (result.success) {
-            createTaskForm.reset();
-            fetchTasks(); // Refresh the tasks list
+            document.getElementById('createTaskForm').reset();
+            await fetchTasks();
         } else {
             alert(`Failed to create task: ${result.error}`);
         }
     } catch (error) {
-        console.error('Error creating task:', error);
+        console.error('Error:', error);
         alert('Failed to create task. Please try again.');
     }
 }
 
 async function fetchTasks() {
     try {
-        // For page 1: offset should be 0
-        // For page 2: offset should be pageSize
-        // For page 3: offset should be pageSize * 2
-        // etc.
-        const offset = Math.max(0, (paginationState.currentPage - 1));
-        const limit = paginationState.pageSize;
-        const response = await fetch(`${API_BASE_URL}/tasks?offset=${offset}&limit=${limit}`);
+        const response = await fetch(`${API_BASE_URL}/tasks`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -178,7 +163,6 @@ async function fetchTasks() {
         const result = await response.json();
         if (result.success) {
             renderTasks(result.data);
-            updatePaginationControls(result.data);
         } else {
             throw new Error(result.error);
         }
@@ -188,8 +172,61 @@ async function fetchTasks() {
     }
 }
 
+function formatTimestamp(timestamp) {
+    if (!timestamp) return 'N/A';
+    return new Date(timestamp).toLocaleString();
+}
+
+function getStatusTimestamp(task) {
+    switch (task.status) {
+        case 3: // Completed
+            return formatTimestamp(task.completed_at);
+        case 4: // Failed
+            return formatTimestamp(task.failed_at);
+        case 5: // Cancelled
+            return formatTimestamp(task.canceled_at);
+        case 2: // Running
+            return formatTimestamp(task.started_at);
+        default:
+            return formatTimestamp(task.created_at);
+    }
+}
+
+function getCommandName(commandId) {
+    // Reverse lookup in TaskCommands object
+    return Object.entries(TaskCommands).find(([name, id]) => id === commandId)?.[0] || 'Unknown';
+}
+
+function renderTask(task) {
+    const taskElement = document.createElement('div');
+    taskElement.className = `task-item status-${TaskStatus[task.status].toLowerCase()}`;
+    
+    const statusTime = getStatusTimestamp(task);
+    const statusText = `${TaskStatus[task.status]}${task.reason ? ` (${task.reason})` : ''}`;
+    const commandName = getCommandName(task.command);
+    
+    taskElement.innerHTML = `
+        <div class="task-header">
+            <h3>${task.name}</h3>
+            <span class="task-status">${statusText}</span>
+        </div>
+        <div class="task-details">
+            <p><strong>ID:</strong> ${task.id}</p>
+            <p><strong>Command:</strong> ${commandName}</p>
+            <p><strong>Created:</strong> ${formatTimestamp(task.created_at)}</p>
+            <p><strong>Status Time:</strong> ${statusTime}</p>
+        </div>
+        <div class="task-actions">
+            ${task.status === 2 ? `<button onclick="cancelTask('${task.id}')">Cancel</button>` : ''}
+            <button onclick="showLogs('${task.id}')">View Logs</button>
+        </div>
+    `;
+    
+    return taskElement;
+}
+
 function renderTasks(data) {
-    const { tasks, total } = data;
+    const { tasks } = data;
     if (!tasks || tasks.length === 0) {
         tasksList.innerHTML = '<p>No tasks found.</p>';
         return;
@@ -198,10 +235,11 @@ function renderTasks(data) {
     tasksList.innerHTML = tasks.map(task => {
         const status = TaskStatus[task.status];
         const statusLower = status.toLowerCase();
+        const commandName = getCommandName(task.command);
         
         let actionButtons = '';
         if (statusLower === 'queued' || statusLower === 'running') {
-            actionButtons = `<button onclick="cancelTask(${task.id})" class="cancel-btn">Cancel</button>`;
+            actionButtons = `<button onclick="cancelTask('${task.id}')" class="cancel-btn">Cancel</button>`;
         }
 
         return `
@@ -210,12 +248,12 @@ function renderTasks(data) {
                 <h3>${task.name}</h3>
             </div>
             <div class="task-info">
-                <p><strong>Command:</strong> ${task.command}</p>
+                <p><strong>Command:</strong> ${commandName}</p>
                 <p><strong>Status:</strong> <span class="task-status status-${statusLower}">${status}</span></p>
                 <p class="exit-code"${task.exit_code === undefined ? ' style="display:none"' : ''}><strong>Exit Code:</strong> ${task.exit_code !== undefined ? task.exit_code : ''}</p>
                 <p class="reason"${!task.reason ? ' style="display:none"' : ''}><strong>Reason:</strong> ${task.reason || ''}</p>
                 <div class="task-actions">
-                    <button onclick="showLogs(${task.id})" class="view-logs-btn">View Logs</button>
+                    <button onclick="showLogs('${task.id}')" class="view-logs-btn">View Logs</button>
                     ${actionButtons}
                 </div>
             </div>
@@ -223,46 +261,41 @@ function renderTasks(data) {
     `}).join('');
 }
 
-function updatePaginationControls(data) {
-    const { tasks, total } = data;
-    paginationState.totalTasks = total;
-    
-    // Disable previous button if we're on the first page
-    prevPageBtn.disabled = paginationState.currentPage === 1;
-    
-    // Calculate total pages
-    const totalPages = Math.ceil(total / paginationState.pageSize);
-    
-    // Disable next button if we're on the last page
-    nextPageBtn.disabled = paginationState.currentPage >= totalPages;
-    
-    // Update page info with more details
-    pageInfo.textContent = `Page ${paginationState.currentPage} of ${totalPages} (${total} total tasks)`;
-}
-
 async function showLogs(taskId) {
     currentTaskId = taskId;
     resetLogState();
     currentLogState.taskId = taskId;
     logsModal.style.display = 'block';
-    logsContent.innerHTML = 'Loading logs...';
+    logsContent.innerHTML = '<p class="logs-loading">Loading logs...</p>';
     
-    // Fetch initial logs
-    await fetchLogs(taskId);
-    
-    // Clear any existing scroll event listener
-    logsContent.onscroll = null;
-    
-    // Add scroll event listener for infinite scrolling
-    logsContent.onscroll = () => {
-        if (logsContent.scrollTop === 0 && currentLogState.hasMoreAbove && !isLoadingLogs) {
-            const newFrom = Math.max(1, currentLogState.loadedLines.from - currentLogState.batchSize);
-            const newTo = currentLogState.loadedLines.from - 1;
-            if (newFrom < newTo) {
-                fetchLogs(taskId, newFrom, newTo);
-            }
+    try {
+        const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/logs`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    };
+
+        const result = await response.json();
+        if (result.success && result.data) {
+            const { logs, total_lines } = result.data;
+            currentLogState.totalLines = total_lines;
+            currentLogState.loadedLines.from = 1;
+            currentLogState.loadedLines.to = logs.length;
+            currentLogState.hasMoreAbove = logs.length < total_lines;
+            
+            renderLogs(logs, total_lines);
+        } else {
+            throw new Error(result.error || 'Failed to fetch logs');
+        }
+    } catch (error) {
+        console.error('Error fetching logs:', error);
+        logsContent.innerHTML = `<p class="error">Failed to load logs: ${error.message}</p>`;
+    }
 }
 
 async function handleLogsScroll() {
@@ -352,59 +385,64 @@ function insertPrefetchedLogs() {
     currentLogState.prefetchedLogs = null;
 }
 
-async function fetchLogs(taskId, from = 0, to = 0) {
-    currentLogState.prefetchedLogs = null; // Clear any prefetched logs
+async function fetchLogs(taskId, from = 1, to = 100) {
+    if (isLoadingLogs) return;
+    isLoadingLogs = true;
+    
     try {
         const queryParams = new URLSearchParams();
         if (from > 0) queryParams.append('from', from);
         if (to > 0) queryParams.append('to', to);
         
-        const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/logs?${queryParams}`);
+        const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/logs?${queryParams}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const result = await response.json();
         if (result.success && result.data) {
-            const logs = result.data.logs || [];
-            const totalLines = result.data.total_lines || 0;
+            const { logs, total_lines } = result.data;
             
             // Update state
-            currentLogState.totalLines = totalLines;
-            if (from === 0 && to === 0) {
-                // Default case - showing last 100 lines
-                currentLogState.loadedLines.from = Math.max(1, totalLines - 100);
-                currentLogState.loadedLines.to = totalLines;
-            } else {
-                currentLogState.loadedLines.from = from || currentLogState.loadedLines.from;
-                currentLogState.loadedLines.to = to || currentLogState.loadedLines.to;
-            }
-            currentLogState.hasMoreAbove = currentLogState.loadedLines.from > 1;
+            currentLogState.totalLines = total_lines;
+            currentLogState.loadedLines.from = from;
+            currentLogState.loadedLines.to = to;
+            currentLogState.hasMoreAbove = from > 1;
             
-            renderLogs(logs, totalLines);
+            renderLogs(logs, total_lines);
         } else {
             throw new Error(result.error || 'No logs data found');
         }
     } catch (error) {
         console.error('Error fetching logs:', error);
         logsContent.innerHTML = `<p class="error">Failed to load logs: ${error.message}</p>`;
+    } finally {
+        isLoadingLogs = false;
     }
 }
 
 function renderLogs(logs, totalLines) {
     if (!logs || logs.length === 0) {
-        logsContent.innerHTML = '<p>No logs available.</p>';
+        logsContent.innerHTML = '<p class="no-logs">No logs available.</p>';
         return;
     }
 
     const header = `<div class="logs-header">Showing lines ${currentLogState.loadedLines.from}-${currentLogState.loadedLines.to} of ${totalLines}</div>`;
-    const logsHtml = logs.map(log => `<p>${log}</p>`).join('');
-    logsContent.innerHTML = header + logsHtml;
+    const logsHtml = logs.map((log, index) => {
+        const lineNumber = currentLogState.loadedLines.from + index;
+        return `<div class="log-line">
+            <span class="line-number">${lineNumber}</span>
+            <span class="log-message">${log}</span>
+        </div>`;
+    }).join('');
     
-    // Scroll to bottom of logs on initial load
-    if (currentLogState.loadedLines.to === currentLogState.totalLines) {
-        logsContent.scrollTop = logsContent.scrollHeight;
-    }
+    logsContent.innerHTML = header + logsHtml;
 }
 
 function connectToSSE() {
@@ -471,30 +509,29 @@ function connectToSSE() {
 }
 
 function handleLogMessage(data) {
-    const taskId = parseInt(data.task_id);
-    if (taskId === currentTaskId) {
-        // Add to buffer with line number
-        const logValue = data.value;
-        const logEntry = {
-            line: logValue.line,
-            lineNumber: logValue.line_number
-        };
+    const logData = data.value;
+    if (!logData || !logData.task_id || !logData.line) return;
 
-        logBuffer.push(logEntry);
-        
-        // Update state
-        currentLogState.totalLines++;
-        currentLogState.loadedLines.to = currentLogState.totalLines;
-
-        // Schedule render if not already pending
-        if (!isRenderPending) {
-            isRenderPending = true;
-            requestAnimationFrame(flushLogBuffer);
+    // If this log is for the currently viewed task
+    if (currentTaskId === logData.task_id) {
+        // Update total lines if needed
+        if (logData.line_number > currentLogState.totalLines) {
+            currentLogState.totalLines = logData.line_number;
         }
 
-        // Force render if buffer is getting too large
-        if (logBuffer.length >= LOG_BUFFER_SIZE) {
-            flushLogBuffer();
+        // Add to buffer
+        logBuffer.push({
+            lineNumber: logData.line_number,
+            message: logData.line.trim()
+        });
+
+        // If buffer is full or no render is pending, schedule a render
+        if (logBuffer.length >= LOG_BUFFER_SIZE && !isRenderPending) {
+            isRenderPending = true;
+            requestAnimationFrame(flushLogBuffer);
+        } else if (!isRenderPending) {
+            isRenderPending = true;
+            setTimeout(flushLogBuffer, RENDER_DELAY);
         }
     }
 }
@@ -505,57 +542,89 @@ function flushLogBuffer() {
         return;
     }
 
-    const fragment = document.createDocumentFragment();
-    const shouldScroll = isScrolledToBottom();
-
-    // Create elements for all buffered logs
-    logBuffer.forEach(log => {
-        const logLine = document.createElement('div');
-        logLine.className = 'log-line';
-        logLine.innerHTML = `<span class="log-message">${log.line}</span>`;
-        fragment.appendChild(logLine);
-    });
-
-    // Update DOM in a single operation
-    logsContent.appendChild(fragment);
-
-    // Update header
-    const header = document.querySelector('.logs-header');
-    if (header) {
-        header.textContent = `Showing lines ${currentLogState.loadedLines.from}-${currentLogState.loadedLines.to} of ${currentLogState.totalLines}`;
+    const logsContainer = document.getElementById('logsContent');
+    if (!logsContainer) {
+        logBuffer = [];
+        isRenderPending = false;
+        return;
     }
 
-    // Maintain scroll position if user was at bottom
-    if (shouldScroll) {
-        logsContent.scrollTop = logsContent.scrollHeight;
+    // Get or create the logs header
+    let header = logsContainer.querySelector('.logs-header');
+    if (!header) {
+        header = document.createElement('div');
+        header.className = 'logs-header';
+        logsContainer.insertBefore(header, logsContainer.firstChild);
     }
 
-    // Clear buffer
-    logBuffer = [];
-    isRenderPending = false;
-}
+    // Update the header
+    header.textContent = `Showing lines 1-${currentLogState.totalLines} of ${currentLogState.totalLines}`;
 
-function isScrolledToBottom() {
-    const threshold = 50; // pixels from bottom to consider "scrolled to bottom"
-    return logsContent.scrollHeight - logsContent.scrollTop - logsContent.clientHeight < threshold;
-}
+    // Sort buffer by line number to ensure correct order
+    logBuffer.sort((a, b) => a.lineNumber - b.lineNumber);
 
-// Virtual scrolling implementation
-const VIRTUAL_SCROLL_BUFFER = 1000; // Maximum number of visible log lines
-function trimOldLogs() {
-    const logElements = logsContent.getElementsByTagName('div');
-    if (logElements.length > VIRTUAL_SCROLL_BUFFER) {
-        const numToRemove = logElements.length - VIRTUAL_SCROLL_BUFFER;
-        for (let i = 0; i < numToRemove; i++) {
-            if (logElements[1]) { // Skip header element
-                logElements[1].remove();
+    // Check if we should auto-scroll
+    const shouldAutoScroll = isScrolledToBottom(logsContainer);
+
+    // Create or update log lines
+    for (const log of logBuffer) {
+        let logLine = logsContainer.querySelector(`.log-line[data-line="${log.lineNumber}"]`);
+        
+        if (!logLine) {
+            logLine = document.createElement('div');
+            logLine.className = 'log-line';
+            logLine.setAttribute('data-line', log.lineNumber);
+            
+            const lineNumber = document.createElement('span');
+            lineNumber.className = 'line-number';
+            lineNumber.textContent = log.lineNumber;
+            
+            const message = document.createElement('span');
+            message.className = 'log-message';
+            message.textContent = log.message;
+            
+            logLine.appendChild(lineNumber);
+            logLine.appendChild(message);
+            logsContainer.appendChild(logLine);
+        } else {
+            // Update existing line if content is different
+            const messageSpan = logLine.querySelector('.log-message');
+            if (messageSpan && messageSpan.textContent !== log.message) {
+                messageSpan.textContent = log.message;
             }
         }
     }
+
+    // Auto-scroll if we were at the bottom
+    if (shouldAutoScroll) {
+        logsContainer.scrollTop = logsContainer.scrollHeight;
+    }
+
+    // Clear the buffer and reset the pending flag
+    logBuffer = [];
+    isRenderPending = false;
+
+    // Trim old logs if there are too many
+    trimOldLogs();
 }
 
-// Add periodic cleanup to prevent memory issues
-setInterval(trimOldLogs, 5000);
+function isScrolledToBottom(element) {
+    const threshold = 50; // pixels from bottom to consider "scrolled to bottom"
+    return element.scrollHeight - element.scrollTop - element.clientHeight < threshold;
+}
+
+function trimOldLogs() {
+    const logsContainer = document.getElementById('logsContent');
+    const maxLines = 1000; // Maximum number of lines to keep in DOM
+    const logLines = logsContainer.querySelectorAll('.log-line');
+    
+    if (logLines.length > maxLines) {
+        const linesToRemove = logLines.length - maxLines;
+        for (let i = 0; i < linesToRemove; i++) {
+            logLines[i].remove();
+        }
+    }
+}
 
 function handleTaskStatusMessage(data) {
     const taskId = parseInt(data.task_id);

@@ -1,10 +1,15 @@
 package dto
 
-import "github.com/fattymango/px-take-home/model"
+import (
+	"fmt"
+	"time"
+
+	"github.com/fattymango/px-take-home/model"
+)
 
 type CrtTask struct {
-	Name    string `json:"name" validate:"required"`
-	Command string `json:"command" validate:"required,not_malformed_command"`
+	Name    string            `json:"name" validate:"required"`
+	Command model.TaskCommand `json:"command" validate:"required,task_command_enum"`
 }
 
 func (c *CrtTask) ToTask() *model.Task {
@@ -16,33 +21,44 @@ func (c *CrtTask) ToTask() *model.Task {
 }
 
 type ViewTask struct {
-	ID       uint64           `json:"id"`
-	Name     string           `json:"name"`
-	Command  string           `json:"command"`
-	Status   model.TaskStatus `json:"status"`
-	Reason   string           `json:"reason"`
-	ExitCode int              `json:"exit_code"`
+	ID      string            `json:"id"`
+	Name    string            `json:"name"`
+	Command model.TaskCommand `json:"command"`
+	Status  model.TaskStatus  `json:"status"`
+	Reason  string            `json:"reason"`
+
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	CanceledAt  time.Time `json:"canceled_at"`
+	CompletedAt time.Time `json:"completed_at"`
+	FailedAt    time.Time `json:"failed_at"`
 }
 
 func ToViewTask(t *model.Task) *ViewTask {
 	return &ViewTask{
-		ID:       t.ID,
-		Name:     t.Name,
-		Command:  t.Command,
-		Status:   t.Status,
-		Reason:   t.Reason,
-		ExitCode: t.ExitCode,
+		ID:      t.ID,
+		Name:    t.Name,
+		Command: t.Command,
+		Status:  t.Status,
+		Reason:  t.Reason,
+
+		CreatedAt:   t.CreatedAt,
+		UpdatedAt:   t.UpdatedAt,
+		CanceledAt:  t.CanceledAt,
+		CompletedAt: t.CompletedAt,
+		FailedAt:    t.FailedAt,
 	}
 }
 
 type ListTasks struct {
 	Tasks []*ViewTask `json:"tasks"`
-	Total int64       `json:"total"`
+	Total int         `json:"total"`
 }
 
-func ToListTasks(tasks []*model.Task, total int64) *ListTasks {
+func ToListTasks(tasks []*model.Task, total int) *ListTasks {
 	viewTasks := make([]*ViewTask, len(tasks))
 	for i, task := range tasks {
+		fmt.Println(task.ID, task.Name)
 		viewTasks[i] = ToViewTask(task)
 	}
 

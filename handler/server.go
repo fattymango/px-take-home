@@ -7,7 +7,6 @@ import (
 	"github.com/fattymango/px-take-home/internal/middleware"
 	"github.com/fattymango/px-take-home/internal/sse"
 	"github.com/fattymango/px-take-home/internal/task"
-	"github.com/fattymango/px-take-home/pkg/db"
 	"github.com/fattymango/px-take-home/pkg/logger"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
@@ -17,7 +16,6 @@ type Server struct {
 	config      *config.Config
 	logger      *logger.Logger
 	App         *fiber.App
-	db          *db.DB
 	validator   *validator.Validate
 	middlewares *Middlewares
 
@@ -25,10 +23,10 @@ type Server struct {
 	sseManager *sse.SseManager
 }
 
-func NewServer(cfg *config.Config, logger *logger.Logger, db *db.DB) (*Server, error) {
+func NewServer(cfg *config.Config, logger *logger.Logger) (*Server, error) {
 	v := validator.New()
 
-	services := newServices(cfg, logger, db)
+	services := newServices(cfg, logger)
 
 	middlewares := &Middlewares{
 		RateLimiter: middleware.RateLimiter(logger),
@@ -38,7 +36,6 @@ func NewServer(cfg *config.Config, logger *logger.Logger, db *db.DB) (*Server, e
 		config:      cfg,
 		logger:      logger,
 		App:         fiber.New(),
-		db:          db,
 		validator:   v,
 		middlewares: middlewares,
 		Services:    services,
@@ -76,18 +73,10 @@ type Services struct {
 	TaskManager *task.TaskManager
 }
 
-func newServices(cfg *config.Config, logger *logger.Logger, db *db.DB) *Services {
-	taskManager := task.NewTaskManager(cfg, logger, task.NewTaskDB(cfg, logger, db))
+func newServices(cfg *config.Config, logger *logger.Logger) *Services {
+	taskManager := task.NewTaskManager(cfg, logger, task.NewTaskStore(cfg, logger))
 	taskManager.Start()
 	return &Services{
 		TaskManager: taskManager,
 	}
-}
-
-func (s *Server) WithTransaction() (*Services, func() error, func() error, error) {
-	db, commit, rollback, err := s.db.NewTransaction()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return newServices(s.config, s.logger, db), commit, rollback, nil
 }

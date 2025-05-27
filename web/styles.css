@@ -39,13 +39,44 @@ form {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    max-width: 500px;
+    margin: 0 auto;
 }
 
-input {
+input, select {
     padding: 0.8rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
     font-size: 1rem;
+    transition: all 0.3s ease;
+    background-color: #fff;
+    width: 100%;
+}
+
+input:focus, select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1em;
+    padding-right: 2.5rem;
+    cursor: pointer;
+}
+
+select:hover {
+    border-color: #2980b9;
+}
+
+select option {
+    padding: 1rem;
 }
 
 button {
@@ -53,14 +84,24 @@ button {
     background-color: #3498db;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 1rem;
-    transition: background-color 0.2s;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 button:hover {
     background-color: #2980b9;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+button:active {
+    transform: translateY(0);
+    box-shadow: none;
 }
 
 #refreshTasks {
@@ -136,17 +177,55 @@ button:hover {
 
 .task-status {
     display: inline-block;
-    padding: 0.25rem 0.5rem;
-    border-radius: 3px;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.task-status.status-queued { background: #ffeaa7; color: #d35400; }
-.task-status.status-running { background: #81ecec; color: #00b894; }
-.task-status.status-completed { background: #55efc4; color: #00b894; }
-.task-status.status-failed { background: #fab1a0; color: #d63031; }
-.task-status.status-canceled { background: #ffebee; color: #ff0000; }
+.status-queued { 
+    background-color: #e9ecef !important; 
+    color: #495057 !important;
+}
+
+.status-running { 
+    background-color: #cce5ff !important; 
+    color: #004085 !important;
+}
+
+.status-completed { 
+    background-color: #d4edda !important; 
+    color: #155724 !important;
+}
+
+.status-failed { 
+    background-color: #f8d7da !important; 
+    color: #721c24 !important;
+}
+
+.status-cancelled { 
+    background-color: #fff3cd !important; 
+    color: #856404 !important;
+}
+
+/* Task item status-based borders */
+.task-item[data-status="queued"] { border-left: 4px solid #6c757d; }
+.task-item[data-status="running"] { border-left: 4px solid #007bff; }
+.task-item[data-status="completed"] { border-left: 4px solid #28a745; }
+.task-item[data-status="failed"] { border-left: 4px solid #dc3545; }
+.task-item[data-status="cancelled"] { border-left: 4px solid #ffc107; }
+
+.reason {
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+}
 
 /* Modal Styles */
 .modal {
@@ -286,20 +365,6 @@ button:hover {
     flex: 1;
     white-space: pre-wrap;
     word-break: break-all;
-}
-
-/* Task status updates */
-.exit-code, .reason {
-    margin: 5px 0;
-    padding: 5px;
-    background-color: #f8f9fa;
-    border-radius: 4px;
-}
-
-.reason {
-    color: #721c24;
-    background-color: #f8d7da;
-    border: 1px solid #f5c6cb;
 }
 
 /* Pagination Controls */

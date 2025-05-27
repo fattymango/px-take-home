@@ -13,10 +13,10 @@ type SedReader struct {
 	config *config.Config
 	logger *logger.Logger
 
-	taskID uint64
+	taskID string
 }
 
-func NewSedReader(config *config.Config, logger *logger.Logger, taskID uint64) LogReader {
+func NewSedReader(config *config.Config, logger *logger.Logger, taskID string) LogReader {
 	return &SedReader{
 		config: config,
 		logger: logger,

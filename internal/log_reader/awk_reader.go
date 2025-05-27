@@ -13,10 +13,10 @@ type AwkReader struct {
 	config *config.Config
 	logger *logger.Logger
 
-	taskID uint64
+	taskID string
 }
 
-func NewAwkReader(config *config.Config, logger *logger.Logger, taskID uint64) LogReader {
+func NewAwkReader(config *config.Config, logger *logger.Logger, taskID string) LogReader {
 	return &AwkReader{
 		config: config,
 		logger: logger,

@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type TaskStatus uint8
 
 const (
@@ -27,12 +29,34 @@ var (
 	}
 )
 
+type TaskCommand uint8
+
+const (
+	TaskCommand_Generate_100_Random_Numbers TaskCommand = iota + 1
+	TaskCommand_Print_100000_Prime_Numbers
+)
+
+var (
+	TaskCommand_name = map[TaskCommand]string{
+		TaskCommand_Generate_100_Random_Numbers: "generate_100_random_numbers",
+		TaskCommand_Print_100000_Prime_Numbers:  "print_100000_prime_numbers",
+	}
+	TaskCommand_value = map[string]TaskCommand{
+		"generate_100_random_numbers": TaskCommand_Generate_100_Random_Numbers,
+		"print_100000_prime_numbers":  TaskCommand_Print_100000_Prime_Numbers,
+	}
+)
+
 type Task struct {
-	ID       uint64     `gorm:"column:id;primary_key;auto_increment" json:"id"`
-	Name     string     `gorm:"column:name;not null" json:"name"`
-	Command  string     `gorm:"column:command;not null" json:"command"`
-	Reason   string     `gorm:"column:reason;not null" json:"reason"` // Reason for canceling the task
-	Status   TaskStatus `gorm:"column:status;not null" json:"status"`
-	ExitCode int        `gorm:"column:exit_code;not null" json:"exit_code"`
-	CommonModel
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Command     TaskCommand `json:"command"`
+	Status      TaskStatus  `json:"status"`
+	Reason      string      `json:"reason"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	CompletedAt time.Time   `json:"completed_at"`
+	FailedAt    time.Time   `json:"failed_at"`
+	CanceledAt  time.Time   `json:"canceled_at"`
+	StartedAt   time.Time   `json:"started_at"`
 }

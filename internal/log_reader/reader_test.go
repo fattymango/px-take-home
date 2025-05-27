@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	testTaskID = uint64(1234)
+	testTaskID = "1234"
 	numLines   = 500000 // 1M lines for aggressive benchmarks
 	lineSize   = 200    // Make each line longer for more realistic data
 )

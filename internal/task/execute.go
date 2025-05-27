@@ -5,7 +5,6 @@ import (
 	"sync/atomic"
 
 	"github.com/fattymango/px-take-home/config"
-	"github.com/fattymango/px-take-home/internal/shell"
 	tasklogger "github.com/fattymango/px-take-home/internal/task_logger"
 	"github.com/fattymango/px-take-home/model"
 	"github.com/fattymango/px-take-home/pkg/logger"
@@ -21,6 +20,7 @@ type JobExecutor struct {
 	config *config.Config
 	logger *logger.Logger
 	job    *Job
+	task   Task
 
 	taskLogger *tasklogger.TaskLogger
 
@@ -46,109 +46,64 @@ func (t *JobExecutor) Execute() error {
 
 	defer t.close()
 
-	_, err := shell.ParseCommand(t.job.task.Command)
+	task, err := NewTaskByCommand(t.config, t.logger, t.job.task.Command)
 	if err != nil {
-		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrMalformedCommand, err), 1)
-		return fmt.Errorf("%s: %s", ErrMalformedCommand, err)
+		return fmt.Errorf("failed to create new task: %w", err)
 	}
+	t.task = task
 
-	if t.config.CMD.Validate {
-		msg, ok := shell.ValidateMaliciousCommand(t.job.task.Command)
-		if !ok {
-			t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrMaliciousCommand, msg), 1)
-			return fmt.Errorf("%s: %s", ErrMaliciousCommand, msg)
-		}
+	taskLogger := tasklogger.NewTaskLogger(t.config, t.logger, t.job.task.ID)
+	err = taskLogger.CreateLogFile()
+	if err != nil {
+		return fmt.Errorf("failed to create log file: %w", err)
 	}
-
-	t.taskLogger.CreateLogFile()
+	t.taskLogger = taskLogger
 	t.taskLogger.Listen()
 
-	executor := shell.NewShellExecutor(t.job.task.Command)
-	err = executor.Execute()
-	if err != nil {
-		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrFailedToExecute, err), 1)
-		return fmt.Errorf("%s: %s", ErrFailedToExecute, err)
-	}
-
-	t.logger.Infof("executing task #%d: %s, command: %s", t.job.task.ID, t.job.task.Name, t.job.task.Command)
 	t.sendTaskRunning()
 
-	var reason string
-
-	cmdStdOutChan, err := executor.StdOutPipe()
-	if err != nil {
-		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrFailedToExecute, err), 1)
-		return fmt.Errorf("%s: %s", ErrFailedToExecute, err)
-	}
-
-	cmdStdErrChan, err := executor.StdErrPipe()
-	if err != nil {
-		t.sendTaskFailed(fmt.Sprintf("%s: %s", ErrFailedToExecute, err), 1)
-		return fmt.Errorf("%s: %s", ErrFailedToExecute, err)
-	}
-
-	for cmdStdOutChan != nil || cmdStdErrChan != nil {
-		select {
-		case line, ok := <-cmdStdErrChan:
-			if !ok {
-				cmdStdErrChan = nil
-				t.logger.Debug("cmdStdErrChan channel closed")
-				continue
-			}
-			t.writeStderrLog(line)
-			reason += string(line)
-		case line, ok := <-cmdStdOutChan:
-			if !ok {
-				cmdStdOutChan = nil
-				t.logger.Debug("cmdStdOutChan channel closed")
-				continue
-			}
-			t.writeStdoutLog(line)
-
-		case <-t.job.ctx.Done():
-			t.logger.Debug("context done, sending task cancelled")
-			err = executor.Cancel()
-			if err != nil {
-				t.logger.Errorf("failed to cancel task: %s", err)
-			}
-			t.logger.Infof("executor cancelled")
-			exitCode, _ := executor.GetExitCode()
-			t.sendTaskCancelled(exitCode)
-			return nil
+	go func() {
+		err = t.task.Run()
+		if err != nil {
+			t.logger.Debugf("task failed: %s", err)
+			t.sendTaskFailed(err.Error())
+			return
 		}
+	}()
 
+	for {
+		select {
+		case <-t.job.ctx.Done():
+			t.logger.Infof("task cancellation requested")
+			t.job.Cancel()
+			t.sendTaskCancelled()
+			return nil
+		case line, ok := <-t.task.Stream():
+			if !ok {
+				t.sendTaskCompleted()
+				return nil
+			}
+			t.writeLog(line)
+		}
 	}
 
-	exitCode, err := executor.GetExitCode()
-	if err != nil {
-		t.logger.Errorf("failed to get exit code: %s", err)
-	}
-	if exitCode != 0 {
-		t.sendTaskFailed(reason, exitCode)
-		return fmt.Errorf("%s: %d", ErrFailedToExecute, exitCode)
-	}
-
-	t.sendTaskCompleted()
-
-	return nil
 }
+
 func (t *JobExecutor) close() {
 	t.logger.Infof("closing task executor")
 	t.taskLogger.Close()
 	t.logger.Infof("task executor closed")
 }
 
-func (t *JobExecutor) sendTaskFailed(reason string, exitCode int) {
+func (t *JobExecutor) sendTaskFailed(reason string) {
 	t.job.task.Status = model.TaskStatus_Failed
 	t.job.task.Reason = reason
-	t.job.task.ExitCode = exitCode
-	t.taskChan <- &JobMsg{op: op_TASK_FAILED, taskID: t.job.task.ID, reason: reason, exitCode: exitCode}
+	t.taskChan <- &JobMsg{op: op_TASK_FAILED, taskID: t.job.task.ID, reason: reason}
 }
 
 func (t *JobExecutor) sendTaskCompleted() {
 	t.job.task.Status = model.TaskStatus_Completed
-	t.job.task.ExitCode = 0
-	t.taskChan <- &JobMsg{op: op_TASK_COMPLETED, taskID: t.job.task.ID, exitCode: 0}
+	t.taskChan <- &JobMsg{op: op_TASK_COMPLETED, taskID: t.job.task.ID}
 }
 
 func (t *JobExecutor) sendTaskRunning() {
@@ -156,19 +111,19 @@ func (t *JobExecutor) sendTaskRunning() {
 	t.taskChan <- &JobMsg{op: op_TASK_RUNNING, taskID: t.job.task.ID}
 }
 
-func (t *JobExecutor) sendTaskCancelled(exitCode int) {
+func (t *JobExecutor) sendTaskCancelled() {
 	t.logger.Infof("sending task cancelled")
 	t.job.task.Status = model.TaskStatus_Cancelled
-	t.taskChan <- &JobMsg{op: op_TASK_CANCELLED, taskID: t.job.task.ID, reason: ReasonCancelledBySystem, exitCode: exitCode}
+	t.taskChan <- &JobMsg{op: op_TASK_CANCELLED, taskID: t.job.task.ID, reason: ReasonCancelledBySystem}
 	t.logger.Infof("task cancelled")
 }
 
-func (t *JobExecutor) writeStdoutLog(line []byte) {
-	t.taskLogger.Write(append(line, '\n'))
-	t.logStream <- &LogMsg{TaskID: t.job.task.ID, LineNumber: int(t.lineNumber.Add(1)), Line: string(line)}
+func (t *JobExecutor) writeLog(line string) {
+	line = fmt.Sprintf("%s\n", line)
+	t.taskLogger.Write(line)
+	t.writeLogToStream(line)
 }
 
-func (t *JobExecutor) writeStderrLog(line []byte) {
-	t.taskLogger.Write(append(line, '\n'))
-	t.logStream <- &LogMsg{TaskID: t.job.task.ID, LineNumber: int(t.lineNumber.Add(1)), Line: string(line)}
+func (t *JobExecutor) writeLogToStream(line string) {
+	t.logStream <- &LogMsg{TaskID: t.job.task.ID, LineNumber: int(t.lineNumber.Add(1)), Line: line}
 }

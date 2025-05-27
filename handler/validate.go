@@ -1,17 +1,18 @@
 package server
 
 import (
-	"strings"
-
+	"github.com/fattymango/px-take-home/model"
 	"github.com/go-playground/validator/v10"
 )
 
 func (s *Server) registerValidator() {
-
-	s.validator.RegisterValidation("not_malformed_command", s.validateNotMalformedCommand)
+	s.validator.RegisterValidation("task_command_enum", s.validateTaskCommandEnum)
 }
 
-func (s *Server) validateNotMalformedCommand(fl validator.FieldLevel) bool {
-	command := fl.Field().String()
-	return strings.Contains(command, " ")
+func (s *Server) validateTaskCommandEnum(fl validator.FieldLevel) bool {
+	command := fl.Field().Uint()
+	if _, ok := model.TaskCommand_name[model.TaskCommand(command)]; !ok {
+		return false
+	}
+	return true
 }

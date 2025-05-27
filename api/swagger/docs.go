@@ -353,14 +353,23 @@ const docTemplate = `{
         "dto.ViewTask": {
             "type": "object",
             "properties": {
-                "command": {
+                "canceled_at": {
                     "type": "string"
                 },
-                "exit_code": {
-                    "type": "integer"
+                "command": {
+                    "$ref": "#/definitions/model.TaskCommand"
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "failed_at": {
+                    "type": "string"
                 },
                 "id": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "name": {
                     "type": "string"
@@ -370,6 +379,9 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/model.TaskStatus"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -386,6 +398,17 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
+        },
+        "model.TaskCommand": {
+            "type": "integer",
+            "enum": [
+                1,
+                2
+            ],
+            "x-enum-varnames": [
+                "TaskCommand_Generate_100_Random_Numbers",
+                "TaskCommand_Print_100000_Prime_Numbers"
+            ]
         },
         "model.TaskStatus": {
             "type": "integer",
