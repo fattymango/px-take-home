@@ -108,7 +108,7 @@ The server can be configured using environment variables.
 
 | Variable | Description | Default | Notes |
 |----------|-------------|-----|-------|
-| CMD_VALIDATE | Whether to validate the command before running it | true |If enabled, shellcheck should be installed on the system |
+| CMD_VALIDATE | Whether to validate the command before running it | true |If enabled, shellcheck should be installed on the system, use `make install-deps` to install it |
 | SERVER_PORT | The port to run the server on | 8888 | |
 | TASK_LOGGER_DIR_PATH | The path to the task logger directory | ./task_logs | |
 | DB_FILE | SQLite database file path | ./db/px.db | |
