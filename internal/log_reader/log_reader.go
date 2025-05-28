@@ -16,20 +16,9 @@ const (
 	MaxFileSize = 1024 * 1024 // 1MB
 )
 
-func FormatFileName(dirpath string, taskID uint64) string {
-	return filepath.Join(dirpath, fmt.Sprintf("%d.log", taskID))
-}
-
-func CheckFileExists(filename string) bool {
-	_, err := os.Stat(filename)
-	return !os.IsNotExist(err)
-}
-func GetFileSize(filename string) (int64, error) {
-	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return 0, fmt.Errorf("file does not exist: %s", filename)
-	}
-	return info.Size(), nil
+// Reader is an interface for reading file logs.
+type Reader interface {
+	Read(from, to int) ([]string, int, error)
 }
 
 type LogReader struct {
@@ -44,6 +33,8 @@ func NewLogReader(config *config.Config, logger *logger.Logger) *LogReader {
 	}
 }
 
+// Read reads the log file from the given task ID and returns the lines in the range of from and to.
+// It uses different readers based on the file size and the range of lines to read.
 func (l *LogReader) Read(taskID uint64, from, to int) ([]string, int, error) {
 	var reader Reader
 	var output []string
@@ -82,6 +73,21 @@ func (l *LogReader) Read(taskID uint64, from, to int) ([]string, int, error) {
 	return nil, 0, nil
 }
 
+func FormatFileName(dirpath string, taskID uint64) string {
+	return filepath.Join(dirpath, fmt.Sprintf("%d.log", taskID))
+}
+
+func CheckFileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return !os.IsNotExist(err)
+}
+func GetFileSize(filename string) (int64, error) {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return 0, fmt.Errorf("file does not exist: %s", filename)
+	}
+	return info.Size(), nil
+}
 func getTotalLines(filename string) (int, error) {
 	cmd := exec.Command("wc", "-l", filename)
 	output, err := cmd.Output()
@@ -91,8 +97,4 @@ func getTotalLines(filename string) (int, error) {
 
 	lines := strings.Split(string(output), " ")
 	return strconv.Atoi(lines[0])
-}
-
-type Reader interface {
-	Read(from, to int) ([]string, int, error)
 }
